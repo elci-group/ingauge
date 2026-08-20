@@ -12,6 +12,6 @@ path = "src/store.rs"
 required = true
 [[command]]
 name = "cargo test"
-cmd = ["cargo", "test"]
+cmd = ["cargo", "test", "--offline"]
 expect_exit = 0
 timeout_secs = 300
