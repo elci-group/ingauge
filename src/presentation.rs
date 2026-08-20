@@ -2,7 +2,7 @@ use crate::error::AppError;
 use serde_json::Value;
 use std::{
     env,
-    fmt::Write as _,
+    fmt::{self, Write as _},
     io::{self, IsTerminal, Write},
     thread,
     time::Duration,
@@ -38,18 +38,20 @@ pub fn render(command: &str, value: &Value) -> String {
     let mut output = String::new();
     let icon = command_icon(command);
     let heading = format!("{icon} InGauge · {}", title(command));
-    let _ = writeln!(output, "╭─ {}", paint(&heading, BOLD, styled));
-    let _ = writeln!(
+    writeln!(output, "╭─ {}", paint(&heading, BOLD, styled)).record();
+    writeln!(
         output,
         "│  {}",
         paint(concat!("v", env!("CARGO_PKG_VERSION")), MUTED, styled)
-    );
+    )
+    .record();
     render_value(value, 1, styled, &mut output);
-    let _ = write!(
+    write!(
         output,
         "╰─ {}",
         paint("measurement complete ✓", GREEN, styled)
-    );
+    )
+    .record();
     output
 }
 
@@ -71,37 +73,55 @@ fn render_value(value: &Value, depth: usize, styled: bool, output: &mut String) 
             for (key, child) in map {
                 let label = format!("{} {}", key_icon(key), humanize(key));
                 if is_scalar(child) {
-                    let _ = writeln!(
+                    writeln!(
                         output,
                         "{prefix}{}  {}",
                         paint(&label, CYAN, styled),
                         scalar(child, styled)
-                    );
+                    )
+                    .record();
                 } else {
-                    let _ = writeln!(output, "{prefix}{}", paint(&label, CYAN, styled));
+                    writeln!(output, "{prefix}{}", paint(&label, CYAN, styled)).record();
                     render_value(child, depth + 1, styled, output);
                 }
             }
         }
         Value::Array(items) if items.is_empty() => {
-            let _ = writeln!(output, "{prefix}{}", paint("◇ none", MUTED, styled));
+            writeln!(output, "{prefix}{}", paint("◇ none", MUTED, styled)).record();
         }
         Value::Array(items) => {
             for (index, child) in items.iter().enumerate() {
                 if is_scalar(child) {
-                    let _ = writeln!(output, "{prefix}• {}", scalar(child, styled));
+                    writeln!(output, "{prefix}• {}", scalar(child, styled)).record();
                 } else {
-                    let _ = writeln!(
+                    writeln!(
                         output,
                         "{prefix}{}",
                         paint(&format!("◆ {}", index + 1), AMBER, styled)
-                    );
+                    )
+                    .record();
                     render_value(child, depth + 1, styled, output);
                 }
             }
         }
         scalar_value => {
-            let _ = writeln!(output, "{prefix}{}", scalar(scalar_value, styled));
+            writeln!(output, "{prefix}{}", scalar(scalar_value, styled)).record();
+        }
+    }
+}
+
+trait RecordFormat {
+    fn record(self);
+}
+
+impl RecordFormat for fmt::Result {
+    fn record(self) {
+        if let Err(error) = self {
+            tracing::error!(
+                operation = "render_terminal_presentation",
+                %error,
+                "failed to render terminal presentation"
+            );
         }
     }
 }
