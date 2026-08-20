@@ -43,6 +43,7 @@ It emits a deterministic Padagonia projection-shaped graph without adding Padago
 
 ```bash
 scripts/ci.sh
+brandi lint --strict --fail-under 90
 cargo bench --bench core --offline
 deliver --spec deliver.toml --strict
 ```

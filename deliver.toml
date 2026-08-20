@@ -23,6 +23,15 @@ required = true
 path = "deny.toml"
 required = true
 [[file]]
+path = ".brandi/identity.yaml"
+required = true
+[[file]]
+path = ".brandi/voice.yaml"
+required = true
+[[file]]
+path = ".brandi/visual.yaml"
+required = true
+[[file]]
 path = "docs/improvements-v0.2.md"
 required = true
 forbid_regex = ["TODO", "FIXME", "PLACEHOLDER"]
@@ -37,3 +46,8 @@ name = "quality gate"
 cmd = ["scripts/ci.sh"]
 expect_exit = 0
 timeout_secs = 600
+[[command]]
+name = "brand coherence gate"
+cmd = ["brandi", "lint", "--path", ".", "--strict", "--fail-under", "90"]
+expect_exit = 0
+timeout_secs = 60
