@@ -33,7 +33,7 @@ pub fn snapshots(observations: &[Observation]) -> Vec<CapacitySnapshot> {
                 .unwrap_or(0.0);
             let rate = int(Metric::TokensPerMinute).map(|v| v as f64);
             let exhaustion = remaining.zip(rate).and_then(|(r, v)| {
-                if v > 0 {
+                if v > 0.0 {
                     Some(Utc::now() + chrono::Duration::seconds((r as f64 / v * 60.0) as i64))
                 } else {
                     None

@@ -4,7 +4,6 @@ use ingauge::{
     capacity,
     config::Config,
     forecast,
-    model::*,
     providers::{HarnessAdapter, ProbeContext, ProviderAdapter},
 };
 #[derive(Parser)]

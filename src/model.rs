@@ -9,6 +9,11 @@ impl From<&str> for ProviderId {
         Self(s.to_owned())
     }
 }
+impl From<String> for ProviderId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
 impl fmt::Display for ProviderId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
@@ -60,7 +65,7 @@ pub enum ObservationSource {
     Fixture,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum Confidence {
     Unknown,

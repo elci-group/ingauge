@@ -19,6 +19,15 @@ pub struct General {
     pub history_retention: String,
     pub database: Option<String>,
 }
+impl Default for General {
+    fn default() -> Self {
+        Self {
+            poll_interval: default_poll(),
+            history_retention: default_retention(),
+            database: None,
+        }
+    }
+}
 fn default_poll() -> String {
     "60s".into()
 }
@@ -35,6 +44,13 @@ pub struct ProviderConfig {
 pub struct ForecastConfig {
     #[serde(default = "default_samples")]
     pub minimum_samples: usize,
+}
+impl Default for ForecastConfig {
+    fn default() -> Self {
+        Self {
+            minimum_samples: default_samples(),
+        }
+    }
 }
 fn default_samples() -> usize {
     5
