@@ -1,6 +1,6 @@
-# InGauge
+# InGauge — know your inference headroom
 
-InGauge is a Rust-native, provider-neutral inference-capacity observer and forecasting daemon. It probes any provider, router, or harness through a bounded canonical bridge, converts records into observations, stores bounded history in SQLite, derives quota headroom, and forecasts consumption from ordered samples.
+InGauge makes inference capacity visible, predictable, and operational before workloads hit a limit. The Rust-native daemon probes any provider, router, or harness through a bounded canonical bridge, stores typed history in SQLite, derives headroom, and forecasts consumption from ordered samples.
 
 ## Quick start
 
@@ -13,6 +13,8 @@ cargo run -- --config ingauge.toml daemon
 
 Commands include `status`, `providers`, `discover`, `probe`, `history`, `forecast`, `next`, `health`, `daemon`, `config`, `db`, and `export padagonia`. `discover` inventories known local provider credentials, router binaries, and every ViCo harness manifest without reading or returning secret values. Automation should consume `--json`, whose envelope is versioned independently from individual command data.
 
+Human output uses an instrument-panel layout with semantic colour, contextual emoji, and a brief gauge animation on interactive terminals. Pipes stay ANSI-free, `NO_COLOR=1` disables colour, `INGAUGE_NO_ANIMATION=1` disables motion, and `--json` remains decoration-free for automation.
+
 Each configured target expects `GET {endpoint}{usage_path}` (default `/usage`) returning an array:
 
 ```json
@@ -21,7 +23,7 @@ Each configured target expects `GET {endpoint}{usage_path}` (default `/usage`) r
 
 Remote endpoints require HTTPS; loopback Harness endpoints may use HTTP. Set `api_key_env` to the name of a bearer-token environment variable. The token is read only at request time and is never persisted.
 
-Configuration keys are not restricted to a vendor allowlist, so the same contract supports the locally detected ViCo, GIA, Hermes, Ollama, Codex, Antigravity, Crush, Gemini, Groq, Kimi, OpenClaw, HyperAgent, and future harnesses. Vendor APIs that do not expose a read-only quota endpoint should be connected through a local or remote canonical bridge; Ingauge deliberately does not make billable inference calls merely to estimate capacity.
+Configuration keys are not restricted to a vendor allowlist, so the same contract supports the locally detected ViCo, GIA, Hermes, Ollama, Codex, Antigravity, Crush, Gemini, Groq, Kimi, OpenClaw, HyperAgent, and future harnesses. Vendor APIs that do not expose a read-only quota endpoint should be connected through a local or remote canonical bridge; InGauge deliberately does not make billable inference calls merely to estimate capacity.
 
 ## Operations
 

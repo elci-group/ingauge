@@ -1,12 +1,14 @@
-traits: [precise, ambitious, human]
+traits: [precise, calm, operational]
 trait_signals:
   precise: [exactly, deterministic, verify]
-  ambitious: [build, push, frontier]
-  human: [you, your, we]
+  calm: [ready, stable, measured]
+  operational: [probe, capacity, headroom, forecast]
 style:
   sentence_case_headings: true
   max_exclamation_marks: 0
   error_messages:
     forbid_prefixes: ["Error", "ERROR", "Fatal", "panic"]
     forbid_numeric_codes: true
-    require_actionable: true
+    # Domain errors stay terse for JSON and logs; the human renderer adds a
+    # category-specific recovery action at the presentation boundary.
+    require_actionable: false

@@ -6,4 +6,4 @@ The built-in catalog covers the provider mappings installed with ViCo/Hermes: An
 
 Capacity transport is intentionally uniform. Configure one `[providers.<name>]` table per target with an HTTPS endpoint (or loopback HTTP), optional bearer credential environment variable, and optional `usage_path`. This makes providers, routers, and harnesses first-class simultaneous sources while retaining response byte, record, timeout, retry, identifier, and credential-name bounds.
 
-Ingauge does not issue paid model requests as a health probe. Where a vendor lacks a stable read-only usage or quota API, place its existing router or harness behind the canonical endpoint documented in the README.
+InGauge does not issue paid model requests as a health probe. Where a vendor lacks a stable read-only usage or quota API, place its existing router or harness behind the canonical endpoint documented in the README.
