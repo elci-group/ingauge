@@ -71,10 +71,11 @@ fn config_validate_and_json_status_have_stable_contracts() {
         .output()
         .expect("run binary");
     assert!(output.status.success());
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "configuration valid"
-    );
+    let human = String::from_utf8_lossy(&output.stdout);
+    assert!(human.contains("╭─ ✅ InGauge · Config validate"));
+    assert!(human.contains("│  › Valid  ✅ yes"));
+    assert!(human.contains("╰─ measurement complete ✓"));
+    assert!(!human.contains("\x1b["));
 
     let output = binary()
         .args(["--json", "--config", config.to_str().unwrap(), "status"])
@@ -116,12 +117,28 @@ fn invalid_configuration_uses_stable_exit_code_and_json_error() {
     let config = directory.path().join("bad.toml");
     fs::write(&config, "schema_version = 99\n").expect("write config");
     let output = binary()
-        .args(["--config", config.to_str().unwrap(), "status"])
+        .args(["--json", "--config", config.to_str().unwrap(), "status"])
         .output()
         .expect("run binary");
     assert_eq!(output.status.code(), Some(3));
     let body: Value = serde_json::from_slice(&output.stderr).expect("valid JSON error");
     assert_eq!(body["errors"][0]["code"], "configuration_error");
+}
+
+#[test]
+fn invalid_configuration_has_a_styled_human_recovery_hint() {
+    let directory = TempDir::new().expect("temp directory");
+    let config = directory.path().join("bad.toml");
+    fs::write(&config, "schema_version = 99\n").expect("write config");
+    let output = binary()
+        .args(["--config", config.to_str().unwrap(), "status"])
+        .output()
+        .expect("run binary");
+    assert_eq!(output.status.code(), Some(3));
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("⛔ InGauge · Action needed"));
+    assert!(error.contains("ingauge config validate"));
+    assert!(!error.contains("\x1b["));
 }
 
 #[test]

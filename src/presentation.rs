@@ -138,11 +138,23 @@ fn paint(text: &str, code: &str, enabled: bool) -> String {
 }
 
 fn animation_enabled() -> bool {
-    io::stderr().is_terminal()
-        && env::var_os("NO_COLOR").is_none()
-        && env::var_os("CI").is_none()
-        && env::var_os("INGAUGE_NO_ANIMATION").is_none()
-        && env::var("TERM").map_or(true, |term| term != "dumb")
+    animation_allowed(
+        io::stderr().is_terminal(),
+        env::var_os("NO_COLOR").is_some(),
+        env::var_os("CI").is_some(),
+        env::var_os("INGAUGE_NO_ANIMATION").is_some(),
+        env::var("TERM").is_ok_and(|term| term == "dumb"),
+    )
+}
+
+fn animation_allowed(
+    terminal: bool,
+    no_color: bool,
+    continuous_integration: bool,
+    reduced_motion: bool,
+    dumb_terminal: bool,
+) -> bool {
+    terminal && !no_color && !continuous_integration && !reduced_motion && !dumb_terminal
 }
 
 fn title(command: &str) -> String {
@@ -218,5 +230,15 @@ mod tests {
         let output = render_error(&AppError::Configuration("invalid input".into()));
         assert!(output.contains("⛔ InGauge"));
         assert!(output.contains("config validate"));
+    }
+
+    #[test]
+    fn animation_requires_an_interactive_opted_in_terminal() {
+        assert!(animation_allowed(true, false, false, false, false));
+        assert!(!animation_allowed(false, false, false, false, false));
+        assert!(!animation_allowed(true, true, false, false, false));
+        assert!(!animation_allowed(true, false, true, false, false));
+        assert!(!animation_allowed(true, false, false, true, false));
+        assert!(!animation_allowed(true, false, false, false, true));
     }
 }
