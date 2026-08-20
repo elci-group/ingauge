@@ -1,11 +1,15 @@
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use ingauge::{
-    capacity,
-    config::Config,
-    forecast,
-    providers::{HarnessAdapter, ProbeContext, ProviderAdapter},
+    app::{App, Envelope},
+    config::{parse_duration, Config},
+    daemon,
+    error::AppError,
 };
+use serde_json::{json, Value};
+use std::path::PathBuf;
+use tracing_subscriber::EnvFilter;
+
 #[derive(Parser)]
 #[command(
     name = "ingauge",
@@ -16,126 +20,238 @@ struct Cli {
     #[arg(long, global = true)]
     json: bool,
     #[arg(long, global = true)]
-    watch: bool,
-    #[arg(long, global = true)]
-    config: Option<std::path::PathBuf>,
+    config: Option<PathBuf>,
     #[command(subcommand)]
     command: Option<Command>,
 }
+
 #[derive(Subcommand)]
 enum Command {
-    Status,
+    Status {
+        #[arg(long)]
+        refresh: bool,
+    },
     Providers,
+    Discover {
+        #[arg(long)]
+        harness_directory: Option<PathBuf>,
+    },
     Probe,
-    History,
-    Forecast,
+    History {
+        #[arg(long)]
+        provider: Option<String>,
+        #[arg(long)]
+        model: Option<String>,
+        #[arg(long)]
+        since: Option<String>,
+        #[arg(long, default_value_t = 1_000)]
+        limit: usize,
+    },
+    Forecast {
+        #[arg(long)]
+        provider: Option<String>,
+        #[arg(long)]
+        model: Option<String>,
+    },
     Next,
+    Health,
+    Daemon,
     Config {
         #[command(subcommand)]
         command: ConfigCommand,
     },
+    Db {
+        #[command(subcommand)]
+        command: DbCommand,
+    },
+    Export {
+        #[command(subcommand)]
+        command: ExportCommand,
+    },
 }
+
 #[derive(Subcommand)]
 enum ConfigCommand {
     Validate,
 }
+
+#[derive(Subcommand)]
+enum DbCommand {
+    Migrate,
+    Integrity,
+    Checkpoint,
+    Backup { output: PathBuf },
+}
+
+#[derive(Subcommand)]
+enum ExportCommand {
+    Padagonia {
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long)]
+        since: Option<String>,
+    },
+}
+
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_target(false)
-        .with_ansi(false)
-        .try_init()
-        .ok();
+    init_tracing();
     let cli = Cli::parse();
-    let cfg = match Config::load(cli.config.as_deref()) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("{e}");
-            std::process::exit(3)
+    if let Err(error) = run(cli).await {
+        tracing::error!(event = "command_failed", error_code = error.code(), error = %error, "command failed");
+        let code = error.exit_code();
+        let body = json!({
+            "schema_version": ingauge::app::JSON_SCHEMA_VERSION,
+            "version": env!("CARGO_PKG_VERSION"),
+            "generated_at": Utc::now(),
+            "data": null,
+            "warnings": [],
+            "errors": [error.body()],
+        });
+        if let Ok(rendered) = serde_json::to_string_pretty(&body) {
+            eprintln!("{rendered}");
+        }
+        std::process::exit(i32::from(code));
+    }
+}
+
+async fn run(cli: Cli) -> Result<(), AppError> {
+    let resolved_path = Config::resolve_path(cli.config.as_deref());
+    let config = Config::load(cli.config.as_deref())
+        .map_err(|error| AppError::Configuration(error.to_string()))?;
+    config
+        .validate()
+        .map_err(|error| AppError::Configuration(error.to_string()))?;
+    let app = App::new(config)?;
+    let command = cli.command.unwrap_or(Command::Status { refresh: false });
+    let (name, value) = match command {
+        Command::Status { refresh } => ("status", app.status(refresh).await?),
+        Command::Providers => {
+            let providers: Vec<Value> = app.config.providers.iter().map(|(name, provider)| json!({
+                "name": name, "enabled": provider.enabled.unwrap_or(true), "endpoint": provider.endpoint,
+                "credential_env": provider.api_key_env,
+            })).collect();
+            ("providers", json!(providers))
+        }
+        Command::Discover { harness_directory } => {
+            let directory =
+                harness_directory.or_else(ingauge::discovery::default_harness_directory);
+            (
+                "discover",
+                json!(ingauge::discovery::discover(directory.as_deref())),
+            )
+        }
+        Command::Probe => {
+            let observations = app.probe().await?;
+            let snapshots = app.snapshots(&observations, Utc::now());
+            (
+                "probe",
+                json!({"observations": observations, "snapshots": snapshots}),
+            )
+        }
+        Command::History {
+            provider,
+            model,
+            since,
+            limit,
+        } => {
+            let since = since.as_deref().map(parse_since).transpose()?;
+            (
+                "history",
+                json!(app.history(provider.as_deref(), model.as_deref(), since, limit)?),
+            )
+        }
+        Command::Forecast { provider, model } => (
+            "forecast",
+            app.forecast(provider.as_deref(), model.as_deref())?,
+        ),
+        Command::Next => {
+            let latest = app.open_store()?.latest()?;
+            let snapshots = app.snapshots(&latest, Utc::now());
+            ("next", json!(ingauge::forecast::events(&snapshots)))
+        }
+        Command::Health => {
+            let poll = parse_duration(&app.config.general.poll_interval)
+                .map_err(|error| AppError::Configuration(error.to_string()))?;
+            let health = app.open_store()?.health()?;
+            let data = health.map(|health| {
+                let age = (Utc::now() - health.heartbeat_at).num_seconds().max(0) as u64;
+                json!({"status": if age <= poll.as_secs() * 2 { "healthy" } else { "stale" },
+                    "heartbeat_at": health.heartbeat_at, "last_success_at": health.last_success_at, "pid": health.pid, "age_seconds": age})
+            }).unwrap_or_else(|| json!({"status":"unknown"}));
+            ("health", data)
+        }
+        Command::Daemon => {
+            daemon::run(app, resolved_path).await?;
+            return Ok(());
+        }
+        Command::Config {
+            command: ConfigCommand::Validate,
+        } => ("config_validate", json!({"valid":true})),
+        Command::Db { command } => {
+            let mut store = app.open_store()?;
+            let data = match command {
+                DbCommand::Migrate => {
+                    store.migrate()?;
+                    json!({"migrated":true})
+                }
+                DbCommand::Integrity => json!({"result":store.integrity_check()?}),
+                DbCommand::Checkpoint => {
+                    store.checkpoint()?;
+                    json!({"checkpointed":true})
+                }
+                DbCommand::Backup { output } => {
+                    store.backup(&output)?;
+                    json!({"backup":output})
+                }
+            };
+            ("db", data)
+        }
+        Command::Export {
+            command: ExportCommand::Padagonia { output, since },
+        } => {
+            let since = since.as_deref().map(parse_since).transpose()?;
+            let count = app.export_padagonia(&output, since)?;
+            (
+                "export_padagonia",
+                json!({"output":output,"observations":count}),
+            )
         }
     };
-    if let Err(e) = cfg.validate() {
-        eprintln!("{e}");
-        std::process::exit(3)
-    }
-    if matches!(
-        cli.command,
-        Some(Command::Config {
-            command: ConfigCommand::Validate
-        })
-    ) {
+    render(name, value, cli.json)
+}
+
+fn parse_since(value: &str) -> Result<chrono::DateTime<Utc>, AppError> {
+    let duration =
+        parse_duration(value).map_err(|error| AppError::Configuration(error.to_string()))?;
+    let duration = chrono::Duration::from_std(duration)
+        .map_err(|error| AppError::Configuration(error.to_string()))?;
+    Ok(Utc::now() - duration)
+}
+
+fn render(command: &'static str, value: Value, json_output: bool) -> Result<(), AppError> {
+    if json_output {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&Envelope::success(command, value))?
+        );
+    } else if command == "config_validate" {
         println!("configuration valid");
-        return;
-    }
-    let mut snaps = Vec::new();
-    if let Some(p) = cfg.providers.get("harness") {
-        if p.enabled.unwrap_or(true) {
-            let adapter = HarnessAdapter {
-                endpoint: p
-                    .endpoint
-                    .clone()
-                    .unwrap_or_else(|| "http://127.0.0.1:3000".into()),
-            };
-            let ctx = ProbeContext {
-                client: reqwest::Client::new(),
-                now: Utc::now(),
-            };
-            match adapter.probe(&ctx).await {
-                Ok(s) => {
-                    snaps = capacity::snapshots(&s.observations);
-                    if let Some(path) = cfg.general.database.as_deref() {
-                        if let Ok(store) = ingauge::store::Store::open(path) {
-                            for o in s.observations {
-                                let _ = store.insert(&o);
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    if cli.json {
-                        println!("{{\"error\":{}}}", serde_json::to_string(&e).unwrap())
-                    } else {
-                        println!("InGauge\n\nHARNESS  ✗ {e}");
-                    }
-                    if !cli.json {
-                        std::process::exit(4)
-                    }
-                    return;
-                }
-            }
-        }
-    }
-    if cli.json {
-        println!("{}",serde_json::to_string_pretty(&serde_json::json!({"version":"0.1.0","observed_at":Utc::now(),"snapshots":snaps,"events":forecast::events(&snaps)})).unwrap());
     } else {
         println!(
-            "InGauge v0.1.0\nInference capacity · {}\n",
-            Utc::now().format("%H:%M UTC")
+            "InGauge v{} · {command}\n{}",
+            env!("CARGO_PKG_VERSION"),
+            serde_json::to_string_pretty(&value)?
         );
-        if snaps.is_empty() {
-            println!("No enabled providers returned capacity data. Configure [providers.harness] or use --json.");
-        }
-        for s in &snaps {
-            println!(
-                "{:<12} {:<18} {:>5.0}%  {:?}  {}",
-                s.provider,
-                s.model.as_ref().map(|m| m.0.as_str()).unwrap_or("—"),
-                s.headroom * 100.,
-                s.state,
-                s.next_reset
-                    .map(|x| x.format("%H:%M").to_string())
-                    .unwrap_or_else(|| "—".into())
-            );
-        }
-        let es = forecast::events(&snaps);
-        if !es.is_empty() {
-            println!("\nNEXT CAPACITY EVENTS");
-            for e in es {
-                println!("{}  {:<12} {:?}", e.at.format("%H:%M"), e.provider, e.kind)
-            }
-        }
     }
-    if cli.watch {
-        let _ = cli.watch;
-    }
+    Ok(())
+}
+
+fn init_tracing() {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .with_ansi(false)
+        .try_init();
 }

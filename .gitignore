@@ -1,5 +1,13 @@
 /target/
 .kaptaind/
+.traci/
+*.db
+*.db-shm
+*.db-wal
+*.backup
+coverage/
+benchmark-results/
+.kaptaind/
 *.db
 *.db-shm
 *.db-wal

@@ -1,0 +1,39 @@
+{
+  "name": "ingauge",
+  "skill_version": "1.0.0",
+  "compatible_apps": [
+    ">=0.1.0, <0.2.0"
+  ],
+  "created": "2026-08-20T19:45:37.405271547Z",
+  "last_verified": "2026-08-20",
+  "confidence": 0.95,
+  "status": "active",
+  "verified_app_version": "0.1.0",
+  "mutation_history": [],
+  "context": {
+    "frameworks": [
+      "tokio"
+    ],
+    "toolchains": [],
+    "directories": [
+      "skills",
+      "src"
+    ],
+    "dependencies": {
+      "async-trait": "0.1",
+      "chrono": "0.4",
+      "clap": "4",
+      "reqwest": "0.12",
+      "rusqlite": "0.32",
+      "serde": "1",
+      "serde_json": "1",
+      "tempfile": "3",
+      "thiserror": "2",
+      "tokio": "1",
+      "toml": "0.8",
+      "tracing": "0.1",
+      "tracing-subscriber": "0.3"
+    }
+  },
+  "body_path": "ingauge.md"
+}

@@ -2,3 +2,9 @@
 .kaptaind/
 target/
 *.db
+*.db-shm
+*.db-wal
+*.backup
+coverage/
+benchmark-results/
+.traci/

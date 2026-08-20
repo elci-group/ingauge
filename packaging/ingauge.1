@@ -1,0 +1,12 @@
+.TH INGAUGE 1 "August 2026" "InGauge 0.2" "User Commands"
+.SH NAME
+ingauge \- observe and forecast local inference capacity
+.SH SYNOPSIS
+.B ingauge
+[--json] [--config PATH] COMMAND
+.SH COMMANDS
+status, providers, discover, probe, history, forecast, next, health, daemon, config, db, export.
+.SH FILES
+$XDG_CONFIG_HOME/ingauge/ingauge.toml and the configured SQLite history database.
+.SH SECURITY
+Remote endpoints require HTTPS. Credentials are resolved from environment variables named in configuration and are never persisted.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "InGauge"
+  short_description: "Observe and forecast inference capacity"
+  default_prompt: "Use $ingauge to inspect current provider capacity and forecast the next recovery."

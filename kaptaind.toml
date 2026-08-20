@@ -1,3 +1,6 @@
+[operation]
+mode = "actuate"
+
 [watch]
 path = "."
 recursive = true
@@ -7,8 +10,11 @@ ignore_file = ".kaptainignore"
 window = 5
 
 [test]
-command = "cargo test"
+command = "scripts/ci.sh"
 required = true
+
+[staging]
+mode = "cluster"
 
 [trust]
 execution = "trusted"

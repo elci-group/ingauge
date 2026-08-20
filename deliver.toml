@@ -10,8 +10,30 @@ required = true
 [[file]]
 path = "src/store.rs"
 required = true
+[[file]]
+path = "src/app.rs"
+required = true
+[[file]]
+path = "src/daemon.rs"
+required = true
+[[file]]
+path = "src/discovery.rs"
+required = true
+[[file]]
+path = "deny.toml"
+required = true
+[[file]]
+path = "docs/improvements-v0.2.md"
+required = true
+forbid_regex = ["TODO", "FIXME", "PLACEHOLDER"]
+[[file]]
+path = "docs/system-integrations.md"
+required = true
+[[file]]
+path = "packaging/ingauge.service"
+required = true
 [[command]]
-name = "cargo test"
-cmd = ["cargo", "test", "--offline"]
+name = "quality gate"
+cmd = ["scripts/ci.sh"]
 expect_exit = 0
-timeout_secs = 300
+timeout_secs = 600
