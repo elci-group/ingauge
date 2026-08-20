@@ -1,11 +1,11 @@
 palette:
-  primary: "#FF2DAA"
-  secondary: ["#FF78C8", "#DCA7FF", "#FF4D6D", "#FFB020", "#58D5FF"]
-  neutrals: ["#FFF7FC", "#160812", "#6F5B68"]
+  primary: "#58D5FF"
+  secondary: ["#41D38A", "#FFB020", "#FF4D6D", "#8B9DB0"]
+  neutrals: ["#F4FAFD", "#101820", "#526778"]
 color_tolerance: 24
 typography:
-  style: technical_modern
-  preferred_fonts: []
+  style: instrument_panel
+  preferred_fonts: ["Berkeley Mono", "JetBrains Mono", "monospace"]
 assets:
   social_card: { width: 1200, height: 630 }
   thumbnail: { width: 1280, height: 720 }

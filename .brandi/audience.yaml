@@ -1,9 +1,16 @@
 segments:
   - name: platform_engineers
-    description: "Teams responsible for engineering governance"
-    pains: ["identity drift", "inconsistent UX copy"]
+    description: "Teams operating shared inference providers and model gateways"
+    pains: ["quota surprises", "opaque provider limits", "capacity incidents"]
+  - name: agent_builders
+    description: "Engineers running coding agents and inference harnesses"
+    pains: ["unknown headroom", "unpredictable resets", "fragmented usage data"]
 narratives:
-  - capability: "brand linting"
-    narrative: "prevent identity drift before it ships"
+  - capability: "capacity forecasting"
+    narrative: "see exhaustion and recovery before a workload stalls"
+    audiences: [platform_engineers, agent_builders]
+    formats: [demo_video, docs, terminal_demo]
+  - capability: "provider-neutral observations"
+    narrative: "one operational view across providers, routers, and harnesses"
     audiences: [platform_engineers]
-    formats: [x_post, blog, demo_video, docs]
+    formats: [blog, docs]

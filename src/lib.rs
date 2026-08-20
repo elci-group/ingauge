@@ -6,6 +6,7 @@ pub mod discovery;
 pub mod error;
 pub mod forecast;
 pub mod model;
+pub mod presentation;
 pub mod providers;
 pub mod store;
 
