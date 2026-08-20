@@ -14,7 +14,8 @@ use tracing_subscriber::EnvFilter;
 #[command(
     name = "ingauge",
     version,
-    about = "Inference-capacity observability and forecasting"
+    about = "📊 Inference-capacity observability and forecasting",
+    after_help = "💡 Human output is styled automatically. Use --json for automation, NO_COLOR=1 for plain output, or INGAUGE_NO_ANIMATION=1 for reduced motion."
 )]
 struct Cli {
     #[arg(long, global = true)]
@@ -27,16 +28,21 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// 📊 Show current capacity and upcoming events.
     Status {
         #[arg(long)]
         refresh: bool,
     },
+    /// ☁️ List configured capacity targets.
     Providers,
+    /// 🛰️ Discover providers, routers, and harnesses on this system.
     Discover {
         #[arg(long)]
         harness_directory: Option<PathBuf>,
     },
+    /// 📡 Probe every enabled target now.
     Probe,
+    /// 🗂️ Query timestamped capacity observations.
     History {
         #[arg(long)]
         provider: Option<String>,
@@ -47,23 +53,30 @@ enum Command {
         #[arg(long, default_value_t = 1_000)]
         limit: usize,
     },
+    /// 🔭 Forecast consumption from stored observations.
     Forecast {
         #[arg(long)]
         provider: Option<String>,
         #[arg(long)]
         model: Option<String>,
     },
+    /// ⚡ Show the next projected capacity events.
     Next,
+    /// 💚 Report daemon heartbeat health.
     Health,
+    /// 🔄 Run continuous capacity observation.
     Daemon,
+    /// ✅ Validate configuration.
     Config {
         #[command(subcommand)]
         command: ConfigCommand,
     },
+    /// 🗄️ Maintain the capacity database.
     Db {
         #[command(subcommand)]
         command: DbCommand,
     },
+    /// 🕸️ Export capacity data to another system.
     Export {
         #[command(subcommand)]
         command: ExportCommand,
@@ -97,19 +110,24 @@ enum ExportCommand {
 async fn main() {
     init_tracing();
     let cli = Cli::parse();
+    let json_output = cli.json;
     if let Err(error) = run(cli).await {
-        tracing::error!(event = "command_failed", error_code = error.code(), error = %error, "command failed");
+        tracing::debug!(event = "command_failed", error_code = error.code(), error = %error, "command failed; presenting recovery guidance");
         let code = error.exit_code();
-        let body = json!({
-            "schema_version": ingauge::app::JSON_SCHEMA_VERSION,
-            "version": env!("CARGO_PKG_VERSION"),
-            "generated_at": Utc::now(),
-            "data": null,
-            "warnings": [],
-            "errors": [error.body()],
-        });
-        if let Ok(rendered) = serde_json::to_string_pretty(&body) {
-            eprintln!("{rendered}");
+        if json_output {
+            let body = json!({
+                "schema_version": ingauge::app::JSON_SCHEMA_VERSION,
+                "version": env!("CARGO_PKG_VERSION"),
+                "generated_at": Utc::now(),
+                "data": null,
+                "warnings": [],
+                "errors": [error.body()],
+            });
+            if let Ok(rendered) = serde_json::to_string_pretty(&body) {
+                eprintln!("{rendered}");
+            }
+        } else {
+            eprintln!("{}", ingauge::presentation::render_error(&error));
         }
         std::process::exit(i32::from(code));
     }
@@ -235,14 +253,11 @@ fn render(command: &'static str, value: Value, json_output: bool) -> Result<(), 
             "{}",
             serde_json::to_string_pretty(&Envelope::success(command, value))?
         );
-    } else if command == "config_validate" {
-        println!("configuration valid");
     } else {
-        println!(
-            "InGauge v{} · {command}\n{}",
-            env!("CARGO_PKG_VERSION"),
-            serde_json::to_string_pretty(&value)?
-        );
+        if let Err(error) = ingauge::presentation::animate(command) {
+            tracing::debug!(event = "output_animation_skipped", error = %error, "terminal animation unavailable");
+        }
+        println!("{}", ingauge::presentation::render(command, &value));
     }
     Ok(())
 }
