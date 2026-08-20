@@ -1,0 +1,4 @@
+.git/
+.kaptaind/
+target/
+*.db

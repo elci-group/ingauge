@@ -1,0 +1,17 @@
+[[file]]
+path = "Cargo.toml"
+required = true
+[[file]]
+path = "src/model.rs"
+required = true
+[[file]]
+path = "src/providers.rs"
+required = true
+[[file]]
+path = "src/store.rs"
+required = true
+[[command]]
+name = "cargo test"
+cmd = ["cargo", "test"]
+expect_exit = 0
+timeout_secs = 300

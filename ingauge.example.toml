@@ -1,0 +1,11 @@
+[general]
+poll_interval = "60s"
+history_retention = "30d"
+database = "ingauge.db"
+
+[providers.harness]
+enabled = true
+endpoint = "http://127.0.0.1:3000"
+
+[forecast]
+minimum_samples = 5
