@@ -1,4 +1,5 @@
 use crate::{
+    admission::{serve, AdmissionController},
     app::App,
     config::{parse_duration, Config},
     error::AppError,
@@ -19,6 +20,23 @@ pub async fn run(mut app: App, config_path: Option<PathBuf>) -> Result<(), AppEr
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     let mut hangup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())?;
 
+    let admission_controller = AdmissionController::new(app.config.admission.clone());
+    let admission_handle = if app.config.admission.enabled {
+        let addr =
+            app.config.admission.listen_addr.parse().map_err(|error| {
+                AppError::Configuration(format!("admission listen_addr: {error}"))
+            })?;
+        let controller = admission_controller.clone();
+        Some(tokio::spawn(async move {
+            if let Err(error) = serve(controller, addr).await {
+                tracing::error!(event = "admission_server_failed", error = %error, "admission server stopped");
+            }
+        }))
+    } else {
+        tracing::info!("admission server disabled");
+        None
+    };
+
     tracing::info!(database = %database_path.display(), "daemon started");
     loop {
         tokio::select! {
@@ -27,7 +45,12 @@ pub async fn run(mut app: App, config_path: Option<PathBuf>) -> Result<(), AppEr
                 let span = tracing::info_span!("poll_cycle", poll_id = %poll_id);
                 let _entered = span.enter();
                 match app.probe().await {
-                    Ok(_) => { last_success = Some(Utc::now()); tracing::info!("poll cycle succeeded"); }
+                    Ok(observations) => {
+                        last_success = Some(Utc::now());
+                        tracing::info!("poll cycle succeeded");
+                        let snapshots = app.snapshots(&observations, Utc::now());
+                        admission_controller.update_snapshots(snapshots);
+                    }
                     Err(error) => tracing::warn!(error_code = error.code(), error = %error, "poll cycle failed"),
                 }
                 let store = app.open_store()?;
@@ -52,6 +75,7 @@ pub async fn run(mut app: App, config_path: Option<PathBuf>) -> Result<(), AppEr
                             period = parse_duration(&config.general.poll_interval)
                                 .map_err(|error| AppError::Configuration(error.to_string()))?;
                             app = App::new(config)?;
+                            admission_controller.update_snapshots(Vec::new());
                             ticker = interval(period);
                             ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
                             tracing::info!(event = "configuration_reloaded", "configuration reloaded");
@@ -61,6 +85,9 @@ pub async fn run(mut app: App, config_path: Option<PathBuf>) -> Result<(), AppEr
                 }
             }
         }
+    }
+    if let Some(handle) = admission_handle {
+        handle.abort();
     }
     app.open_store()?.checkpoint()?;
     tracing::info!(event = "daemon_stopped", "daemon stopped cleanly");

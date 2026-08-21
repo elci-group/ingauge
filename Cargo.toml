@@ -1,6 +1,10 @@
+[workspace]
+members = ["crates/ingauge-gate"]
+resolver = "2"
+
 [package]
 name = "ingauge"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2021"
 description = "Local inference-capacity observability and forecasting daemon"
 license = "MIT"
@@ -15,6 +19,7 @@ async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+axum = "0.7"
 rusqlite = { version = "0.40.1", features = ["bundled", "backup"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

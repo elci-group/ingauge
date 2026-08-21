@@ -20,6 +20,8 @@ pub struct Config {
     pub providers: BTreeMap<String, ProviderConfig>,
     #[serde(default)]
     pub forecast: ForecastConfig,
+    #[serde(default)]
+    pub admission: AdmissionConfig,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -97,6 +99,33 @@ pub struct ForecastConfig {
     pub critical_threshold: f64,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdmissionConfig {
+    #[serde(default = "default_admission_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_listen_addr")]
+    pub listen_addr: String,
+    #[serde(default = "default_max_concurrent")]
+    pub max_concurrent: usize,
+    #[serde(default = "default_default_delay_ms")]
+    pub default_delay_ms: u64,
+    #[serde(default = "default_admit_when_unknown")]
+    pub admit_when_unknown: bool,
+}
+
+impl Default for AdmissionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_admission_enabled(),
+            listen_addr: default_listen_addr(),
+            max_concurrent: default_max_concurrent(),
+            default_delay_ms: default_default_delay_ms(),
+            admit_when_unknown: default_admit_when_unknown(),
+        }
+    }
+}
+
 impl Default for ForecastConfig {
     fn default() -> Self {
         Self {
@@ -116,6 +145,7 @@ impl Default for Config {
             general: General::default(),
             providers: BTreeMap::new(),
             forecast: ForecastConfig::default(),
+            admission: AdmissionConfig::default(),
         }
     }
 }
@@ -158,6 +188,21 @@ fn default_constrained() -> f64 {
 }
 fn default_critical() -> f64 {
     0.1
+}
+fn default_admission_enabled() -> bool {
+    true
+}
+fn default_listen_addr() -> String {
+    "127.0.0.1:8080".into()
+}
+fn default_max_concurrent() -> usize {
+    4
+}
+fn default_default_delay_ms() -> u64 {
+    1_000
+}
+fn default_admit_when_unknown() -> bool {
+    true
 }
 
 pub fn parse_duration(value: &str) -> Result<Duration, ProviderError> {
@@ -270,6 +315,28 @@ impl Config {
             return Err(ProviderError::Configuration(
                 "max_attempts must be between 1 and 10".into(),
             ));
+        }
+        if self.admission.enabled {
+            if self.admission.max_concurrent == 0 {
+                tracing::warn!(
+                    event = "configuration_rejected",
+                    field = "admission.max_concurrent",
+                    "configuration value out of range"
+                );
+                return Err(ProviderError::Configuration(
+                    "admission.max_concurrent must be at least 1".into(),
+                ));
+            }
+            if self.admission.default_delay_ms == 0 {
+                tracing::warn!(
+                    event = "configuration_rejected",
+                    field = "admission.default_delay_ms",
+                    "configuration value out of range"
+                );
+                return Err(ProviderError::Configuration(
+                    "admission.default_delay_ms must be at least 1".into(),
+                ));
+            }
         }
         if self.forecast.minimum_samples < 2 {
             tracing::warn!(

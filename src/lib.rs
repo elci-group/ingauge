@@ -1,3 +1,4 @@
+pub mod admission;
 pub mod app;
 pub mod capacity;
 pub mod config;
