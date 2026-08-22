@@ -1,6 +1,7 @@
 /target/
 .kaptaind/
 .traci/
+.lwoodz/
 *.db
 *.db-shm
 *.db-wal

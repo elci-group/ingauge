@@ -9,6 +9,7 @@ use crate::{
 use chrono::Utc;
 use std::path::{Path, PathBuf};
 use tokio::time::{interval, MissedTickBehavior};
+use tracing::Instrument;
 
 pub async fn run(mut app: App, config_path: Option<PathBuf>) -> Result<(), AppError> {
     let mut period = parse_duration(&app.config.general.poll_interval)
@@ -29,11 +30,14 @@ pub async fn run(mut app: App, config_path: Option<PathBuf>) -> Result<(), AppEr
                 AppError::Configuration(format!("admission listen_addr: {error}"))
             })?;
         let controller = admission_controller.clone();
+        let span = tracing::info_span!("admission_server", address = %addr);
+        // traci: allow - the task is explicitly instrumented with the named span below.
         Some(tokio::spawn(async move {
             if let Err(error) = serve(controller, addr).await {
                 tracing::error!(event = "admission_server_failed", error = %error, "admission server stopped");
             }
-        }))
+        }
+        .instrument(span)))
     } else {
         tracing::info!("admission server disabled");
         None

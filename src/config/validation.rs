@@ -97,9 +97,14 @@ fn validate_forecast(config: &Config) -> Result<(), ProviderError> {
         moderate,
         "configuration values invalid"
     );
-    Err(ProviderError::Configuration(
-        "thresholds must satisfy 0 < critical < constrained < moderate < 1".into(),
-    ))
+    let error = "thresholds must satisfy 0 < critical < constrained < moderate < 1";
+    tracing::error!(
+        event = "configuration_validation_failed",
+        field = "forecast_thresholds",
+        error,
+        "rejecting invalid configuration"
+    );
+    Err(ProviderError::Configuration(error.into()))
 }
 
 fn validate_providers(config: &Config) -> Result<(), ProviderError> {

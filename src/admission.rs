@@ -192,7 +192,10 @@ impl AdmissionController {
         let now = Utc::now();
         let provider = match ProviderId::new(&request.provider) {
             Ok(id) => id,
-            Err(_) => return proceed_response(now, "invalid provider, nothing to complete".into()),
+            Err(error) => {
+                tracing::warn!(event = "invalid_completion_provider_id", provider = %request.provider, %error, "nothing to complete");
+                return proceed_response(now, "invalid provider, nothing to complete".into());
+            }
         };
         let model = request
             .model
