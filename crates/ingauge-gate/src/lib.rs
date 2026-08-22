@@ -123,11 +123,16 @@ impl Admitter {
     /// - `NO_COLOR` (unset by default)
     pub fn from_env() -> Self {
         let base_url = std::env::var("INGAUGE_URL").unwrap_or_else(|_| DEFAULT_URL.to_string());
-        let timeout = std::env::var("INGAUGE_ADMIT_TIMEOUT")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .map(Duration::from_secs)
-            .unwrap_or_else(|| Duration::from_secs(DEFAULT_TIMEOUT_SECONDS));
+        let timeout = match std::env::var("INGAUGE_ADMIT_TIMEOUT") {
+            Ok(value) => match value.parse::<u64>() {
+                Ok(seconds) => Duration::from_secs(seconds),
+                Err(error) => {
+                    tracing::warn!(event = "invalid_admit_timeout", value = %value, %error, "using default admission timeout");
+                    Duration::from_secs(DEFAULT_TIMEOUT_SECONDS)
+                }
+            },
+            Err(_) => Duration::from_secs(DEFAULT_TIMEOUT_SECONDS),
+        };
         let fallback_on_error = std::env::var("INGAUGE_FALLBACK")
             .map(|v| !v.eq_ignore_ascii_case("false") && v != "0")
             .unwrap_or(true);
@@ -139,6 +144,7 @@ impl Admitter {
             tracing::warn!(%error, "failed to build admitter from env; using fallback");
             Self {
                 client: Client::new(),
+                // traci: allow - DEFAULT_URL is a compile-time-valid URL constant.
                 base_url: DEFAULT_URL.parse().unwrap(),
                 fallback_on_error: true,
                 show_timer,
@@ -168,6 +174,7 @@ impl Admitter {
         let status = response.status();
         if !status.is_success() && status != StatusCode::TOO_MANY_REQUESTS {
             let body = response.text().await.unwrap_or_default();
+            tracing::error!(event = "admission_endpoint_failed", %status, body_length = body.len(), "admission endpoint returned an error");
             return Err(GateError::Endpoint { status, body });
         }
         Ok(response.json::<AdmissionResponse>().await?)

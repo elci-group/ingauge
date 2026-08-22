@@ -7,7 +7,7 @@ use crate::{
 use chrono::{DateTime, Duration, Utc};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard},
 };
 use tracing;
 
@@ -16,6 +16,19 @@ mod protocol;
 
 pub use http::{router, serve};
 pub use protocol::{AdmissionDecision, AdmissionRequest, AdmissionResponse};
+
+fn lock_state(inner: &Mutex<InnerState>) -> MutexGuard<'_, InnerState> {
+    match inner.lock() {
+        Ok(state) => state,
+        Err(poisoned) => {
+            tracing::error!(
+                event = "admission_mutex_poisoned",
+                "recovering poisoned admission state"
+            );
+            poisoned.into_inner()
+        }
+    }
+}
 
 /// State kept for a single in-flight admission lease.
 #[derive(Debug, Clone)]
@@ -48,7 +61,7 @@ impl AdmissionController {
 
     /// Update the capacity snapshots used for admission decisions.
     pub fn update_snapshots(&self, snapshots: Vec<CapacitySnapshot>) {
-        let mut state = self.inner.lock().expect("admission mutex poisoned");
+        let mut state = lock_state(&self.inner);
         state.snapshots.clear();
         for snapshot in snapshots {
             state.snapshots.insert(
@@ -68,6 +81,7 @@ impl AdmissionController {
         let provider = match ProviderId::new(&request.provider) {
             Ok(id) => id,
             Err(error) => {
+                tracing::warn!(event = "invalid_provider_id", provider = %request.provider, %error, "delaying request with invalid provider");
                 return delay_response(
                     now,
                     self.config.default_delay_ms,
@@ -79,6 +93,7 @@ impl AdmissionController {
             Some(value) => match ModelId::new(value) {
                 Ok(id) => Some(id),
                 Err(error) => {
+                    tracing::warn!(event = "invalid_model_id", model = %value, %error, "delaying request with invalid model");
                     return delay_response(
                         now,
                         self.config.default_delay_ms,
@@ -89,7 +104,7 @@ impl AdmissionController {
             None => None,
         };
 
-        let mut state = self.inner.lock().expect("admission mutex poisoned");
+        let mut state = lock_state(&self.inner);
         self.prune_expired(&mut state, now);
 
         let key = (provider.clone(), model.clone());
@@ -182,9 +197,15 @@ impl AdmissionController {
         let model = request
             .model
             .as_deref()
-            .and_then(|value| ModelId::new(value).ok());
+            .and_then(|value| match ModelId::new(value) {
+                Ok(model) => Some(model),
+                Err(error) => {
+                    tracing::warn!(event = "invalid_completion_model_id", model = %value, %error, "completing provider-wide lease");
+                    None
+                }
+            });
 
-        let mut state = self.inner.lock().expect("admission mutex poisoned");
+        let mut state = lock_state(&self.inner);
         let key = (provider.clone(), model.clone());
         if let Some(leases) = state.leases.get_mut(&key) {
             // Remove the oldest still-valid lease as a best-effort completion signal.
