@@ -23,6 +23,11 @@ execution = "trusted"
 enabled = true
 branch = "main"
 
+[push.safety]
+allow_force = false
+require_upstream_exist = true
+protect_branches = []
+
 [ship]
 enabled = true
 require_qualification = true
