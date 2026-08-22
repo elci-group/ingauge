@@ -36,6 +36,25 @@ path = "docs/improvements-v0.2.md"
 required = true
 forbid_regex = ["TODO", "FIXME", "PLACEHOLDER"]
 [[file]]
+path = "docs/sota-assessment.md"
+required = true
+forbid_regex = ["TODO", "FIXME", "PLACEHOLDER"]
+require_regex = ["85/100", "Scorecard", "Release recommendation"]
+[[file]]
+path = "ROADMAP.md"
+required = true
+forbid_regex = ["TODO", "FIXME", "PLACEHOLDER"]
+require_regex = ["P0", "P1", "P2", "P3", "≥95/100"]
+[[file]]
+path = ".github/workflows/ci.yml"
+required = true
+[[file]]
+path = "poka.toml"
+required = true
+[[file]]
+path = "poka.lock"
+required = true
+[[file]]
 path = "docs/system-integrations.md"
 required = true
 [[file]]

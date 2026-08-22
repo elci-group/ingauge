@@ -48,4 +48,11 @@ cargo bench --bench core --offline
 deliver --spec deliver.toml --strict
 ```
 
-See `docs/improvements-v0.2.md`, `docs/threat-model.md`, and `docs/migrations.md` for acceptance evidence and operational boundaries.
+## Project state
+
+InGauge currently grades **85/100 (A−)** across ten equally weighted production criteria: production-ready, with release trust, resilience evidence, performance budgets, and operational SLOs remaining before a SOTA claim.
+
+- 📊 Read the evidence-backed [SOTA assessment](docs/sota-assessment.md).
+- 🎯 Follow the measurable [roadmap to SOTA](ROADMAP.md).
+- 🧾 Review the [v0.2 improvement ledger](docs/improvements-v0.2.md).
+- 🔐 Operate within the documented [threat model](docs/threat-model.md) and [migration runbook](docs/migrations.md).

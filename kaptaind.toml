@@ -20,5 +20,22 @@ mode = "cluster"
 execution = "trusted"
 
 [push]
-enabled = false
+enabled = true
 branch = "main"
+
+[ship]
+enabled = true
+require_qualification = true
+targets = ["x86_64-unknown-linux-gnu"]
+
+[ship.sbom]
+enabled = true
+
+[ship.provenance]
+enabled = true
+
+[ship.stable]
+channels = ["binaries", "github-releases"]
+push_tag = true
+release_notes = true
+require_qualification = true
