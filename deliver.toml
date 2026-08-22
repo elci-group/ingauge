@@ -46,6 +46,11 @@ required = true
 forbid_regex = ["TODO", "FIXME", "PLACEHOLDER"]
 require_regex = ["P0", "P1", "P2", "P3", "≥95/100"]
 [[file]]
+path = "docs/release-runbook.md"
+required = true
+forbid_regex = ["TODO", "FIXME", "PLACEHOLDER"]
+require_regex = ["Qualified release", "Acceptance checks", "Rollback decision", "Evidence bundle"]
+[[file]]
 path = ".github/workflows/ci.yml"
 required = true
 [[file]]

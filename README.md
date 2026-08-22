@@ -55,4 +55,5 @@ InGauge currently grades **85/100 (A−)** across ten equally weighted productio
 - 📊 Read the evidence-backed [SOTA assessment](docs/sota-assessment.md).
 - 🎯 Follow the measurable [roadmap to SOTA](ROADMAP.md).
 - 🧾 Review the [v0.2 improvement ledger](docs/improvements-v0.2.md).
+- 🚢 Use the qualification-gated [release and rollback runbook](docs/release-runbook.md).
 - 🔐 Operate within the documented [threat model](docs/threat-model.md) and [migration runbook](docs/migrations.md).
