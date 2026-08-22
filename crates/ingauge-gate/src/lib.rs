@@ -1,3 +1,5 @@
+// Copyright (c) 2026 sal
+// SPDX-License-Identifier: MIT
 //! Optional client for the ingauge admission gate.
 //!
 //! This crate wraps LLM calls with a lightweight admission request to a local

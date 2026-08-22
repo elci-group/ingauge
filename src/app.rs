@@ -1,3 +1,5 @@
+// Copyright (c) 2026 sal
+// SPDX-License-Identifier: MIT
 use crate::{
     capacity::{self, CapacityPolicy},
     config::{parse_duration, Config, ProviderConfig},

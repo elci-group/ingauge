@@ -1,3 +1,5 @@
+// Copyright (c) 2026 sal
+// SPDX-License-Identifier: MIT
 use crate::model::*;
 use chrono::{DateTime, Duration, Utc};
 use std::collections::BTreeMap;

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 sal
+# SPDX-License-Identifier: MIT
 """Project discovery and source scanning primitives for find-byok."""
 
 from __future__ import annotations

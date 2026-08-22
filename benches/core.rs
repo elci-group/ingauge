@@ -1,3 +1,5 @@
+// Copyright (c) 2026 sal
+// SPDX-License-Identifier: MIT
 use chrono::{Duration, Utc};
 use ingauge::{
     capacity::{snapshots_at, CapacityPolicy},

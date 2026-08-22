@@ -1,3 +1,5 @@
+// Copyright (c) 2026 sal
+// SPDX-License-Identifier: MIT
 use crate::providers::ProviderError;
 use serde::Deserialize;
 use std::{

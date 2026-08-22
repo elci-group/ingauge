@@ -1,3 +1,5 @@
+// Copyright (c) 2026 sal
+// SPDX-License-Identifier: MIT
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use ingauge::{

@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright (c) 2026 sal
+# SPDX-License-Identifier: MIT
 set -eu
 
 cargo fmt --all -- --check

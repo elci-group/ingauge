@@ -1,3 +1,5 @@
+# Copyright (c) 2026 sal
+# SPDX-License-Identifier: MIT
 palette:
   primary: "#58D5FF"
   secondary: ["#41D38A", "#FFB020", "#FF4D6D", "#8B9DB0"]

@@ -1,3 +1,5 @@
+// Copyright (c) 2026 sal
+// SPDX-License-Identifier: MIT
 use super::Confidence;
 use serde::{Deserialize, Serialize};
 

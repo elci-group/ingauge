@@ -1,3 +1,5 @@
+// Copyright (c) 2026 sal
+// SPDX-License-Identifier: MIT
 use super::{parse_duration, Config, ProviderConfig, CONFIG_SCHEMA_VERSION};
 use crate::{model::ProviderId, providers::ProviderError};
 use std::time::Duration;

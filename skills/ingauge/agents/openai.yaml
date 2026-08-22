@@ -1,3 +1,5 @@
+# Copyright (c) 2026 sal
+# SPDX-License-Identifier: MIT
 interface:
   display_name: "InGauge"
   short_description: "Observe and forecast inference capacity"

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 sal
+# SPDX-License-Identifier: MIT
 segments:
   - name: platform_engineers
     description: "Teams operating shared inference providers and model gateways"

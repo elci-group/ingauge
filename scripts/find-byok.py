@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 sal
+# SPDX-License-Identifier: MIT
 """Discover BYOK LLM usage in local projects using chakra + heuristics.
 
 Usage:

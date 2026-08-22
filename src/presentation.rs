@@ -1,3 +1,5 @@
+// Copyright (c) 2026 sal
+// SPDX-License-Identifier: MIT
 use crate::error::AppError;
 use serde_json::Value;
 use std::{

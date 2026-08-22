@@ -1,10 +1,12 @@
+# Copyright (c) 2026 sal
+# SPDX-License-Identifier: MIT
 [workspace]
 members = ["crates/ingauge-gate"]
 resolver = "2"
 
 [package]
 name = "ingauge"
-version = "0.4.2"
+version = "0.4.3"
 edition = "2021"
 description = "Local inference-capacity observability and forecasting daemon"
 license = "MIT"

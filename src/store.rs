@@ -1,3 +1,5 @@
+// Copyright (c) 2026 sal
+// SPDX-License-Identifier: MIT
 use crate::model::*;
 use chrono::{DateTime, Utc};
 use rusqlite::{backup::Backup, params, Connection, OptionalExtension};

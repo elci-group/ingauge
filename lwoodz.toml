@@ -1,0 +1,48 @@
+# Lwoodz licensing configuration for InGauge.
+
+[project]
+license = "MIT"
+copyright_holder = "sal"
+copyright_year = 2026
+project_name = "ingauge"
+
+[operation]
+mode = "enforce"
+
+[watch]
+path = "."
+recursive = true
+ignore_file = ".lwoodignore"
+
+[generate]
+license_file = "LICENSE"
+notice_file = "NOTICE"
+copyright_file = "COPYRIGHT"
+attribution_file = "THIRD_PARTY_NOTICES"
+overwrite = true
+
+[headers]
+enabled = true
+insert_spdx = true
+exclude = ["target/**", "node_modules/**", "dist/**", ".git/**", ".lwoodz/**", "vendor/**"]
+
+[compatibility]
+enforce = true
+policy = "permissive"
+
+[daemon]
+startup_guard = false
+shutdown_grace_secs = 10
+
+[inference]
+enabled = false
+
+[spdx]
+produce_manifest = true
+manifest_path = ".lwoodz/manifest.json"
+include_transitive = false
+
+[audit]
+enabled = true
+log_path = ".lwoodz/audit.jsonl"
+fail_on_incompatible = false

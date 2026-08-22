@@ -1,3 +1,5 @@
+// Copyright (c) 2026 sal
+// SPDX-License-Identifier: MIT
 use serde::Serialize;
 use std::{collections::BTreeSet, env, fs, path::Path};
 

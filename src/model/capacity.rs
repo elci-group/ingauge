@@ -1,3 +1,5 @@
+// Copyright (c) 2026 sal
+// SPDX-License-Identifier: MIT
 use super::{Confidence, Metric, ModelId, ProviderId};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

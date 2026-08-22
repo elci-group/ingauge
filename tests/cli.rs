@@ -1,4 +1,6 @@
 #![allow(clippy::unwrap_used)]
+// Copyright (c) 2026 sal
+// SPDX-License-Identifier: MIT
 
 use chrono::{Duration, Utc};
 use ingauge::{store::Store, Confidence, Metric, MetricValue, Observation, ObservationSource};

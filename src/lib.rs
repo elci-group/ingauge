@@ -1,3 +1,5 @@
+// Copyright (c) 2026 sal
+// SPDX-License-Identifier: MIT
 pub mod admission;
 pub mod app;
 pub mod capacity;
