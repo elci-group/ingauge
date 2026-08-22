@@ -13,69 +13,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import re
 import subprocess
 import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from pathlib import Path
 from typing import Iterable
 
-# External dependency names (crates, npm packages, go modules) that strongly
-# suggest LLM API usage.
-LLM_DEPENDENCY_PATTERNS = [
-    re.compile(r"\bopenai\b", re.I),
-    re.compile(r"\banthropic\b", re.I),
-    re.compile(r"\bclaude\b", re.I),
-    re.compile(r"\bgroq\b", re.I),
-    re.compile(r"\bollama\b", re.I),
-    re.compile(r"\b@anthropic-ai/sdk\b", re.I),
-    re.compile(r"\bopenai-node\b", re.I),
-]
-
-# Environment-variable names that indicate a user-supplied LLM API key.
-API_KEY_PATTERNS = [
-    re.compile(r"\bOPENAI_API_KEY\b"),
-    re.compile(r"\bOPENAI_KEY\b"),
-    re.compile(r"\bANTHROPIC_API_KEY\b"),
-    re.compile(r"\bCLAUDE_API_KEY\b"),
-    re.compile(r"\bGROQ_API_KEY\b"),
-    re.compile(r"\bGPT_OSS_API_KEY\b"),
-    re.compile(r"\bGEMINI_API_KEY\b"),
-    re.compile(r"\bGOOGLE_API_KEY\b"),
-    re.compile(r"\bDEEPSEEK_API_KEY\b"),
-]
-
-# Known LLM provider hostnames in endpoint URLs.
-LLM_HOST_PATTERNS = [
-    re.compile(r"api\.openai\.com", re.I),
-    re.compile(r"api\.anthropic\.com", re.I),
-    re.compile(r"api\.groq\.com", re.I),
-    re.compile(r"api\.gpt-oss\.com", re.I),
-    re.compile(r"generativelanguage\.googleapis\.com", re.I),
-    re.compile(r"api\.deepseek\.com", re.I),
-    re.compile(r"openrouter\.ai", re.I),
-]
-
-# Source file extensions to grep.
-SOURCE_EXTENSIONS = {".rs", ".ts", ".js", ".tsx", ".jsx", ".py", ".go", ".java", ".kt"}
-
-
-@dataclass
-class Evidence:
-    type: str
-    file: str
-    line: int
-    detail: str
-    confidence: str
-
-
-@dataclass
-class ProjectReport:
-    path: str
-    chakra_analyzed: bool = False
-    evidence: list[Evidence] = field(default_factory=list)
-    errors: list[str] = field(default_factory=list)
+from byok_core import (
+    LLM_DEPENDENCY_PATTERNS,
+    Evidence,
+    ProjectReport,
+    discover_projects,
+    grep_project,
+    is_likely_project,
+)
 
 
 def run_chakra(project: Path) -> dict | None:
@@ -116,54 +67,6 @@ def analyze_chakra(project: Path, flow: dict) -> Iterable[Evidence]:
                 break
 
 
-def grep_project(project: Path) -> Iterable[Evidence]:
-    for root, _, files in os.walk(project):
-        # Skip dependency and build directories quickly.
-        if any(part in {"target", "node_modules", ".git", ".venv", "venv", "__pycache__", ".cache"} for part in Path(root).parts):
-            continue
-        for filename in files:
-            ext = Path(filename).suffix
-            if ext not in SOURCE_EXTENSIONS:
-                continue
-            path = Path(root) / filename
-            try:
-                text = path.read_text(encoding="utf-8", errors="ignore")
-            except OSError:
-                continue
-            for lineno, raw_line in enumerate(text.splitlines(), start=1):
-                line = raw_line.strip()
-                if not line:
-                    continue
-                for pattern in API_KEY_PATTERNS:
-                    if pattern.search(line):
-                        yield Evidence(
-                            type="api_key_env",
-                            file=str(path.relative_to(project)),
-                            line=lineno,
-                            detail=line[:160],
-                            confidence="high",
-                        )
-                for pattern in LLM_HOST_PATTERNS:
-                    if pattern.search(line):
-                        yield Evidence(
-                            type="llm_endpoint",
-                            file=str(path.relative_to(project)),
-                            line=lineno,
-                            detail=line[:160],
-                            confidence="medium",
-                        )
-
-
-def is_likely_project(path: Path) -> bool:
-    return (
-        (path / "Cargo.toml").exists()
-        or (path / "package.json").exists()
-        or (path / "pyproject.toml").exists()
-        or (path / "setup.py").exists()
-        or (path / "go.mod").exists()
-    )
-
-
 def scan_project(project: Path) -> ProjectReport:
     report = ProjectReport(path=str(project.resolve()))
     if not is_likely_project(project):
@@ -189,15 +92,6 @@ def scan_project(project: Path) -> ProjectReport:
             unique.append(ev)
     report.evidence = unique
     return report
-
-
-def discover_projects(home: Path) -> list[Path]:
-    projects = []
-    for entry in home.iterdir():
-        if entry.is_dir() and not entry.name.startswith("."):
-            if is_likely_project(entry):
-                projects.append(entry)
-    return sorted(projects)
 
 
 def main() -> int:
