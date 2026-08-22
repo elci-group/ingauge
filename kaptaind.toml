@@ -19,6 +19,9 @@ mode = "cluster"
 [trust]
 execution = "trusted"
 
+[capabilities]
+network_push = true
+
 [push]
 enabled = true
 branch = "main"
