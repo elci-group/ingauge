@@ -5,6 +5,7 @@ production_only = true
 require_correlation_id = true
 correlation_fields = ["correlation_id", "request_id", "trace_id"]
 ignore = ["target", ".git", ".kaptaind", ".traci", "tests/fixtures", "src/admission/tests.rs"]
+enabled_rules = ["TRC001", "TRC002", "TRC005", "TRC007"]
 
 [watch]
 interval_ms = 750

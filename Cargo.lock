@@ -799,9 +799,8 @@ dependencies = [
 
 [[package]]
 name = "ingauge"
-version = "0.4.20"
+version = "0.4.30"
 dependencies = [
- "async-trait",
  "axum",
  "chrono",
  "clap",
