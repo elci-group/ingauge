@@ -18,18 +18,12 @@
 //! }
 //! ```
 
+mod presentation;
+
 use chrono::{DateTime, Utc};
 use reqwest::{Client, StatusCode, Url};
 use serde::{Deserialize, Serialize};
-use std::{
-    env,
-    io::{self, IsTerminal},
-    time::{Duration, Instant},
-};
-
-const CYAN: &str = "38;2;88;213;255";
-const GREEN: &str = "38;2;65;211;138";
-const AMBER: &str = "38;2;255;176;32";
+use std::{env, time::Duration};
 
 /// Default URL used when `INGAUGE_URL` is not set.
 pub const DEFAULT_URL: &str = "http://127.0.0.1:8080";
@@ -247,89 +241,7 @@ impl Admitter {
             Duration::from_millis(response.delay_ms)
         };
 
-        let styled = timer_style_enabled();
-        let animated = self.show_timer && timer_animation_enabled();
-        if self.show_timer {
-            eprint!("{}", delay_line(&target, &response.reason, None, styled));
-        }
-
-        if animated {
-            let end = Instant::now() + wait_duration;
-            let mut frame = 0_usize;
-            while Instant::now() < end {
-                let remaining = end - Instant::now();
-                eprint!(
-                    "\r\x1b[2K{}",
-                    animated_delay_line(
-                        &target,
-                        &response.reason,
-                        remaining.as_secs_f64(),
-                        frame,
-                        styled,
-                    )
-                );
-                frame = frame.wrapping_add(1);
-                tokio::time::sleep(Duration::from_millis(200)).await;
-            }
-        } else {
-            tokio::time::sleep(wait_duration).await;
-        }
-        if self.show_timer {
-            let clear = if animated { "\r\x1b[2K" } else { "\n" };
-            eprintln!("{clear}{}", admitted_line(&target, styled));
-        }
-    }
-}
-
-fn timer_style_enabled() -> bool {
-    io::stderr().is_terminal()
-        && env::var_os("NO_COLOR").is_none()
-        && !env::var("TERM").is_ok_and(|term| term == "dumb")
-}
-
-fn timer_animation_enabled() -> bool {
-    timer_style_enabled()
-        && env::var_os("CI").is_none()
-        && env::var_os("INGAUGE_NO_ANIMATION").is_none()
-}
-
-fn delay_line(target: &str, reason: &str, remaining: Option<f64>, styled: bool) -> String {
-    let countdown = remaining.map_or_else(String::new, |seconds| format!(" · {seconds:.1}s"));
-    format!(
-        "{} {} · delaying {target} · {reason}{countdown}",
-        paint("⏳", AMBER, styled),
-        paint("InGauge", CYAN, styled),
-    )
-}
-
-fn animated_delay_line(
-    target: &str,
-    reason: &str,
-    remaining: f64,
-    frame: usize,
-    styled: bool,
-) -> String {
-    let spinner = ["◴", "◷", "◶", "◵"][frame % 4];
-    delay_line(target, reason, Some(remaining), styled).replacen(
-        '⏳',
-        &paint(spinner, AMBER, styled),
-        1,
-    )
-}
-
-fn admitted_line(target: &str, styled: bool) -> String {
-    format!(
-        "{} {} · admitted {target} · capacity ready",
-        paint("✅", GREEN, styled),
-        paint("InGauge", CYAN, styled),
-    )
-}
-
-fn paint(text: &str, color: &str, styled: bool) -> String {
-    if styled {
-        format!("\x1b[{color}m{text}\x1b[0m")
-    } else {
-        text.to_string()
+        presentation::wait(&target, &response.reason, wait_duration, self.show_timer).await;
     }
 }
 
@@ -396,20 +308,5 @@ mod tests {
             .wait_and_admit("groq", Some("m"), None)
             .await
             .is_err());
-    }
-
-    #[test]
-    fn timer_output_is_styled_emojified_and_plain_capable() {
-        let plain = delay_line("groq/model", "capacity constrained", Some(1.25), false);
-        assert_eq!(
-            plain,
-            "⏳ InGauge · delaying groq/model · capacity constrained · 1.2s"
-        );
-        assert!(!plain.contains("\x1b["));
-
-        let styled = admitted_line("groq/model", true);
-        assert!(styled.contains("✅"));
-        assert!(styled.contains("capacity ready"));
-        assert!(styled.contains("\x1b["));
     }
 }
