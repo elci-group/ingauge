@@ -6,7 +6,7 @@ resolver = "2"
 
 [package]
 name = "ingauge"
-version = "0.4.8"
+version = "0.4.10"
 edition = "2021"
 description = "Local inference-capacity observability and forecasting daemon"
 license = "MIT"
