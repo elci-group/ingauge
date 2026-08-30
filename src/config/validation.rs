@@ -14,8 +14,72 @@ impl Config {
         validate_general_bounds(self)?;
         validate_admission(self)?;
         validate_forecast(self)?;
+        validate_instruments(self)?;
         validate_providers(self)
     }
+}
+
+fn validate_instruments(config: &Config) -> Result<(), ProviderError> {
+    if !(1..=60).contains(&config.instruments.provider_cycle_seconds) {
+        return reject(
+            "instruments.provider_cycle_seconds",
+            "provider_cycle_seconds must be between 1 and 60",
+        );
+    }
+    if !(2..=300).contains(&config.instruments.dashboard_sample_seconds) {
+        return reject(
+            "instruments.dashboard_sample_seconds",
+            "dashboard_sample_seconds must be between 2 and 300",
+        );
+    }
+    let network = &config.instruments.network;
+    if !(100..=5_000).contains(&network.sample_interval_ms) {
+        return reject(
+            "instruments.network.sample_interval_ms",
+            "network sample_interval_ms must be between 100 and 5000",
+        );
+    }
+    if !network.bytes_per_token.is_finite() || !(1.0..=32.0).contains(&network.bytes_per_token) {
+        return reject(
+            "instruments.network.bytes_per_token",
+            "network bytes_per_token must be finite and between 1 and 32",
+        );
+    }
+    for (name, gauge) in [
+        ("rpm", &config.instruments.rpm),
+        ("tpm", &config.instruments.tpm),
+    ] {
+        if !gauge.min.is_finite()
+            || !gauge.max.is_finite()
+            || !gauge.redline.is_finite()
+            || gauge.min < 0.0
+            || gauge.max <= gauge.min
+            || !(gauge.min..=gauge.max).contains(&gauge.redline)
+        {
+            return reject(
+                "instruments",
+                format!("instruments.{name} requires finite min < max and min <= redline <= max"),
+            );
+        }
+        if !matches!(
+            gauge.scale_mode.as_str(),
+            "fixed" | "adaptive" | "historical" | "provider-specific"
+        ) {
+            return reject("instruments", format!("instruments.{name}.scale_mode must be fixed, adaptive, historical, or provider-specific"));
+        }
+    }
+    let rpd = &config.instruments.rpd;
+    if !rpd.daily_limit.is_finite()
+        || rpd.daily_limit <= 0.0
+        || !(0.0..1.0).contains(&rpd.warning)
+        || !(rpd.warning..1.0).contains(&rpd.critical)
+    {
+        return reject(
+            "instruments.rpd",
+            "daily_limit must be positive and 0 < warning < critical < 1",
+        );
+    }
+    Ok(())
 }
 
 fn validate_schema(schema_version: u16) -> Result<(), ProviderError> {
@@ -138,6 +202,12 @@ fn validate_provider(id: &str, provider: &ProviderConfig) -> Result<(), Provider
         .is_some_and(|name| !valid_environment_name(name))
     {
         return reject("api_key_env", format!("invalid api_key_env for {id}"));
+    }
+    if provider.credential_source.is_some() && provider.api_key_env.is_none() {
+        return reject(
+            "credential_source",
+            format!("{id} credential_source requires api_key_env"),
+        );
     }
     if !provider.usage_path.starts_with('/')
         || provider.usage_path.contains('?')

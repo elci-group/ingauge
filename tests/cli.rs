@@ -9,7 +9,7 @@ use std::{
     fs,
     io::{Read, Write},
     net::TcpListener,
-    process::{Child, Command},
+    process::{Child, Command, Stdio},
     thread,
     time::Duration as StdDuration,
 };
@@ -88,6 +88,42 @@ fn config_validate_and_json_status_have_stable_contracts() {
     assert_eq!(body["schema_version"], 1);
     assert_eq!(body["command"], "status");
     assert!(body["errors"].as_array().is_some_and(Vec::is_empty));
+}
+
+#[test]
+fn config_tui_writes_provider_metadata_without_copying_the_key() {
+    let directory = TempDir::new().expect("temp directory");
+    let config = directory.path().join("new-ingauge.toml");
+    let dotenv = directory.path().join("provider.env");
+    fs::write(&dotenv, "GROQ_API_KEY=test-secret-value\n").expect("write dotenv");
+    let mut child = binary()
+        .args(["--config", config.to_str().unwrap(), "config", "tui"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("start config tui");
+    let answers = format!("3\n\n\n2\n\n{}\n", dotenv.display());
+    child
+        .stdin
+        .as_mut()
+        .expect("tui stdin")
+        .write_all(answers.as_bytes())
+        .expect("answer tui");
+    let output = child.wait_with_output().expect("finish config tui");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let menu = String::from_utf8_lossy(&output.stdout);
+    assert!(menu.contains("INGAUGE GARAGE"));
+    assert!(menu.contains("key detected ✓"));
+    let saved = fs::read_to_string(config).expect("read generated config");
+    assert!(saved.contains("credential_source = \"dotenv\""));
+    assert!(saved.contains("GROQ_API_KEY"));
+    assert!(saved.contains("endpoint = \"https://api.groq.com\""));
+    assert!(saved.contains("usage_path = \"/openai/v1/models\""));
+    assert!(!saved.contains("test-secret-value"));
 }
 
 #[test]
@@ -209,6 +245,45 @@ fn live_probe_parses_bounded_harness_response() {
     );
     let body: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
     assert_eq!(body["data"]["observations"][3]["value"], 0.5);
+}
+
+#[test]
+fn status_renders_a_faulted_cockpit_when_provider_telemetry_fails() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind fixture server");
+    let address = listener.local_addr().expect("fixture address");
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept request");
+        let mut request = [0_u8; 2048];
+        let _ = stream.read(&mut request).expect("read request");
+        write!(
+            stream,
+            "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )
+        .expect("write response");
+    });
+    let extra = format!(
+        "max_attempts = 1\n[providers.groq]\nendpoint = \"http://{address}\"\nusage_path = \"/usage\"\n"
+    );
+    let (_directory, config) = fixture_with(&extra);
+    let output = binary()
+        .args([
+            "--config",
+            config.to_str().expect("config path"),
+            "status",
+            "--refresh",
+        ])
+        .output()
+        .expect("run status");
+    server.join().expect("server thread");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let dashboard = String::from_utf8_lossy(&output.stdout);
+    assert!(dashboard.contains("TELEMETRY FAULT"), "{dashboard}");
+    assert!(dashboard.contains("GROQ REVS"), "{dashboard}");
+    assert!(String::from_utf8_lossy(&output.stderr).is_empty());
 }
 
 #[test]

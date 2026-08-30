@@ -1,0 +1,58 @@
+schema_version = 1
+
+[general]
+poll_interval = "60s"
+history_retention = "30d"
+connect_timeout = "3s"
+request_timeout = "10s"
+max_response_bytes = 1048576
+max_records = 10000
+max_attempts = 3
+
+[providers.groq]
+enabled = true
+endpoint = "https://api.groq.com"
+api_key_env = "GROQ_API_KEY"
+credential_source = "manual_key_entry"
+credential_file = "/home/sal/.config/ingauge/secrets.env"
+usage_path = "/openai/v1/models"
+
+[forecast]
+minimum_samples = 5
+window = "24h"
+moderate_threshold = 0.7
+constrained_threshold = 0.3
+critical_threshold = 0.1
+
+[admission]
+enabled = true
+listen_addr = "127.0.0.1:8080"
+max_concurrent = 4
+default_delay_ms = 1000
+admit_when_unknown = true
+
+[instruments]
+provider_cycle_seconds = 4
+dashboard_sample_seconds = 15
+
+[instruments.network]
+enabled = true
+sample_interval_ms = 250
+bytes_per_token = 4.0
+
+[instruments.rpm]
+min = 0.0
+max = 10000.0
+redline = 8500.0
+scale_mode = "fixed"
+
+[instruments.tpm]
+min = 0.0
+max = 100000.0
+redline = 85000.0
+scale_mode = "fixed"
+
+[instruments.rpd]
+daily_limit = 100000.0
+warning = 0.75
+critical = 0.9

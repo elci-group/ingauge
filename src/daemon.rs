@@ -5,6 +5,7 @@ use crate::{
     app::App,
     config::{parse_duration, Config},
     error::AppError,
+    telemetry,
 };
 use chrono::Utc;
 use std::path::{Path, PathBuf};
@@ -47,7 +48,7 @@ pub async fn run(mut app: App, config_path: Option<PathBuf>) -> Result<(), AppEr
     loop {
         tokio::select! {
             _ = ticker.tick() => {
-                let poll_id = format!("{}-{}", std::process::id(), Utc::now().timestamp_millis());
+                let poll_id = telemetry::poll_correlation_id();
                 let span = tracing::info_span!("poll_cycle", poll_id = %poll_id);
                 let _entered = span.enter();
                 match app.probe().await {

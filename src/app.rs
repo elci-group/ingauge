@@ -6,7 +6,7 @@ use crate::{
     error::AppError,
     forecast,
     model::*,
-    providers::{HarnessAdapter, ProbeContext, ProviderAdapter, ProviderError},
+    providers::{GroqAdapter, HarnessAdapter, ProbeContext, ProviderAdapter, ProviderError},
     store::Store,
 };
 use chrono::{DateTime, Utc};
@@ -101,7 +101,7 @@ impl App {
                     observations.append(&mut target_observations);
                 }
                 Err(error) => {
-                    tracing::warn!(
+                    tracing::debug!(
                         event = "capacity_target_failed",
                         target = name,
                         error_code = provider_error_code(&error),
@@ -133,7 +133,7 @@ impl App {
         if successes > 0 {
             Ok(observations)
         } else {
-            tracing::error!(
+            tracing::debug!(
                 event = "all_capacity_targets_failed",
                 "no configured capacity target succeeded"
             );
@@ -152,21 +152,23 @@ impl App {
             .endpoint
             .clone()
             .unwrap_or_else(|| "http://127.0.0.1:3000".into());
-        let token = provider
-            .api_key_env
-            .as_ref()
-            .map(|name| {
-                std::env::var(name).map_err(|error| {
-                    tracing::warn!(event = "credential_environment_missing", variable = name, error = %error, "credential unavailable");
-                    ProviderError::Configuration(format!("environment variable {name} is not set: {error}"))
-                })
-            })
-            .transpose()?;
-        let adapter = HarnessAdapter {
-            id: ProviderId::new(name).map_err(ProviderError::Configuration)?,
+        let token = provider.resolve_api_key()?;
+        let id = ProviderId::new(name).map_err(ProviderError::Configuration)?;
+        let harness_adapter = HarnessAdapter {
+            id: id.clone(),
             endpoint,
             usage_path: provider.usage_path.clone(),
         };
+        let groq_adapter = GroqAdapter {
+            id,
+            endpoint: harness_adapter.endpoint.clone(),
+            usage_path: harness_adapter.usage_path.clone(),
+        };
+        let direct_groq = name.eq_ignore_ascii_case("groq")
+            && reqwest::Url::parse(&harness_adapter.endpoint)
+                .ok()
+                .and_then(|url| url.host_str().map(str::to_owned))
+                .is_some_and(|host| host == "api.groq.com");
         let mut last_error = None;
         for attempt in 1..=self.config.general.max_attempts {
             let context = ProbeContext {
@@ -176,9 +178,15 @@ impl App {
                 max_records: self.config.general.max_records,
                 bearer_token: token.clone(),
             };
-            let span = tracing::info_span!("provider_probe", provider = "harness", attempt);
+            let adapter_name = if direct_groq { "groq_api" } else { "harness" };
+            let span = tracing::info_span!("provider_probe", provider = adapter_name, attempt);
             let _entered = span.enter();
-            match adapter.probe(&context).await {
+            let result = if direct_groq {
+                groq_adapter.probe(&context).await
+            } else {
+                harness_adapter.probe(&context).await
+            };
+            match result {
                 Ok(snapshot) => {
                     tracing::info!(
                         observations = snapshot.observations.len(),
@@ -192,8 +200,7 @@ impl App {
                     tokio::time::sleep(Duration::from_millis(100 * u64::from(attempt))).await;
                 }
                 Err(error) => {
-                    tracing::error!(event = "provider_probe_failed", error_code = provider_error_code(&error), error = %error, "provider probe failed");
-                    tracing::error!(event = "provider_probe_returning_error", error = %error, "probe aborted");
+                    tracing::debug!(event = "provider_probe_failed", error_code = provider_error_code(&error), error = %error, "provider probe failed");
                     return Err(error);
                 }
             }
@@ -201,7 +208,7 @@ impl App {
         let error = last_error.unwrap_or(ProviderError::Unknown(
             "retry loop ended unexpectedly".into(),
         ));
-        tracing::error!(event = "provider_retry_exhausted", error = %error, "provider retries exhausted");
+        tracing::debug!(event = "provider_retry_exhausted", error = %error, "provider retries exhausted");
         Err(error)
     }
 
@@ -222,16 +229,36 @@ impl App {
     }
 
     pub async fn status(&self, refresh: bool) -> Result<Value, AppError> {
+        let mut telemetry_error = None;
         let observations = if refresh {
-            self.probe().await?
+            self.probe().await.unwrap_or_else(|error| {
+                telemetry_error = Some(error.to_string());
+                Vec::new()
+            })
         } else if self.config.general.database.is_some() {
             self.open_store()?.latest()?
         } else {
-            self.probe().await?
+            self.probe().await.unwrap_or_else(|error| {
+                telemetry_error = Some(error.to_string());
+                Vec::new()
+            })
         };
         let snapshots = self.snapshots(&observations, Utc::now());
         let events = forecast::events(&snapshots);
-        Ok(json!({ "snapshots": snapshots, "events": events }))
+        let configured_providers = self
+            .config
+            .providers
+            .iter()
+            .filter(|(_, provider)| provider.enabled.unwrap_or(true))
+            .map(|(name, _)| name)
+            .collect::<Vec<_>>();
+        Ok(json!({
+            "snapshots": snapshots,
+            "events": events,
+            "instruments": self.config.instruments,
+            "configured_providers": configured_providers,
+            "telemetry_error": telemetry_error,
+        }))
     }
 
     pub fn history(

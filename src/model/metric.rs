@@ -21,6 +21,8 @@ pub enum Metric {
     DailyLimit,
     MonthlyUsage,
     MonthlyLimit,
+    BudgetUsage,
+    BudgetLimit,
     ResetAt,
 }
 

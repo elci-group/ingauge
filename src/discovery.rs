@@ -24,6 +24,7 @@ const PROVIDERS: &[(&str, &str)] = &[
     ("anthropic", "ANTHROPIC_API_KEY"),
     ("arcee", "ARCEEAI_API_KEY"),
     ("bedrock", "AWS_ACCESS_KEY_ID"),
+    ("bob", "BOB_API_KEY"),
     ("gemini", "GOOGLE_API_KEY"),
     ("glm", "GLM_API_KEY"),
     ("groq", "GROQ_API_KEY"),

@@ -27,6 +27,7 @@ fn snapshot_with_state(state: CapacityState) -> CapacitySnapshot {
         }],
         utilisation: vec![],
         consumption_rate: None,
+        telemetry: Default::default(),
         next_reset: None,
         exhaustion: None,
         headroom: None,

@@ -153,6 +153,7 @@ mod tests {
             remaining: Vec::new(),
             utilisation: Vec::new(),
             consumption_rate: None,
+            telemetry: Default::default(),
             next_reset: Some(now + Duration::hours(2)),
             exhaustion: Some(now + Duration::hours(1)),
             headroom: Some(0.0),

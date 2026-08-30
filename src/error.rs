@@ -1,7 +1,11 @@
 // Copyright (c) 2026 sal
 // SPDX-License-Identifier: MIT
 use crate::{providers::ProviderError, store::StoreError};
-use serde::Serialize;
+
+mod body;
+mod codes;
+
+pub use body::ErrorBody;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
@@ -15,39 +19,6 @@ pub enum AppError {
     Io(#[from] std::io::Error),
     #[error("serialization: {0}")]
     Serialization(#[from] serde_json::Error),
-}
-
-impl AppError {
-    pub fn code(&self) -> &'static str {
-        match self {
-            Self::Configuration(_) => "configuration_error",
-            Self::Provider(_) => "provider_error",
-            Self::Storage(_) => "storage_error",
-            Self::Io(_) => "io_error",
-            Self::Serialization(_) => "serialization_error",
-        }
-    }
-
-    pub fn exit_code(&self) -> u8 {
-        match self {
-            Self::Configuration(_) => 3,
-            Self::Provider(_) => 4,
-            Self::Storage(_) | Self::Io(_) | Self::Serialization(_) => 5,
-        }
-    }
-
-    pub fn body(&self) -> ErrorBody {
-        ErrorBody {
-            code: self.code().to_string(),
-            message: self.to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub struct ErrorBody {
-    pub code: String,
-    pub message: String,
 }
 
 #[cfg(test)]

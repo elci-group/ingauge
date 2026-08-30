@@ -1,7 +1,7 @@
 // Copyright (c) 2026 sal
 // SPDX-License-Identifier: MIT
 use crate::providers::ProviderError;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     fs,
@@ -13,7 +13,7 @@ mod validation;
 
 pub const CONFIG_SCHEMA_VERSION: u16 = 1;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default = "default_schema_version")]
@@ -26,9 +26,111 @@ pub struct Config {
     pub forecast: ForecastConfig,
     #[serde(default)]
     pub admission: AdmissionConfig,
+    #[serde(default)]
+    pub instruments: InstrumentConfig,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+/// Calibration for the telemetry-independent instrument layer. The current
+/// terminal renderer uses fixed mode; clients may use adaptive or
+/// provider-specific calibration without changing telemetry semantics.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct InstrumentConfig {
+    #[serde(default)]
+    pub rpm: PerformanceGaugeConfig,
+    #[serde(default)]
+    pub tpm: PerformanceGaugeConfig,
+    #[serde(default)]
+    pub rpd: ResourceGaugeConfig,
+    #[serde(default = "default_provider_cycle_seconds")]
+    pub provider_cycle_seconds: u64,
+    #[serde(default = "default_dashboard_sample_seconds")]
+    pub dashboard_sample_seconds: u64,
+    #[serde(default)]
+    pub network: NetworkMonitorConfig,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct NetworkMonitorConfig {
+    #[serde(default = "default_network_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_network_sample_millis")]
+    pub sample_interval_ms: u64,
+    #[serde(default = "default_network_bytes_per_token")]
+    pub bytes_per_token: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PerformanceGaugeConfig {
+    #[serde(default)]
+    pub min: f64,
+    #[serde(default = "default_rpm_max")]
+    pub max: f64,
+    #[serde(default = "default_rpm_redline")]
+    pub redline: f64,
+    #[serde(default = "default_scale_mode")]
+    pub scale_mode: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResourceGaugeConfig {
+    #[serde(default = "default_rpd_limit")]
+    pub daily_limit: f64,
+    #[serde(default = "default_rpd_warning")]
+    pub warning: f64,
+    #[serde(default = "default_rpd_critical")]
+    pub critical: f64,
+}
+
+impl Default for InstrumentConfig {
+    fn default() -> Self {
+        Self {
+            rpm: PerformanceGaugeConfig::default(),
+            tpm: PerformanceGaugeConfig {
+                max: 100_000.0,
+                redline: 85_000.0,
+                ..PerformanceGaugeConfig::default()
+            },
+            rpd: ResourceGaugeConfig::default(),
+            provider_cycle_seconds: default_provider_cycle_seconds(),
+            dashboard_sample_seconds: default_dashboard_sample_seconds(),
+            network: NetworkMonitorConfig::default(),
+        }
+    }
+}
+impl Default for NetworkMonitorConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            sample_interval_ms: default_network_sample_millis(),
+            bytes_per_token: default_network_bytes_per_token(),
+        }
+    }
+}
+impl Default for PerformanceGaugeConfig {
+    fn default() -> Self {
+        Self {
+            min: 0.0,
+            max: default_rpm_max(),
+            redline: default_rpm_redline(),
+            scale_mode: default_scale_mode(),
+        }
+    }
+}
+impl Default for ResourceGaugeConfig {
+    fn default() -> Self {
+        Self {
+            daily_limit: default_rpd_limit(),
+            warning: default_rpd_warning(),
+            critical: default_rpd_critical(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct General {
     #[serde(default = "default_poll")]
@@ -63,12 +165,14 @@ impl Default for General {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProviderConfig {
     pub enabled: Option<bool>,
     pub endpoint: Option<String>,
     pub api_key_env: Option<String>,
+    pub credential_source: Option<CredentialSource>,
+    pub credential_file: Option<PathBuf>,
     #[serde(default = "default_usage_path")]
     pub usage_path: String,
 }
@@ -79,16 +183,86 @@ impl Default for ProviderConfig {
             enabled: None,
             endpoint: None,
             api_key_env: None,
+            credential_source: None,
+            credential_file: None,
             usage_path: default_usage_path(),
         }
     }
+}
+
+impl ProviderConfig {
+    pub fn resolve_api_key(&self) -> Result<Option<String>, ProviderError> {
+        let Some(variable) = self.api_key_env.as_deref() else {
+            return Ok(None);
+        };
+        match self.credential_source {
+            None => {
+                return std::env::var(variable).map(Some).map_err(|_| {
+                    ProviderError::Configuration(format!(
+                        "environment variable {variable} is not set"
+                    ))
+                });
+            }
+            Some(CredentialSource::Bashrc) => {
+                if let Ok(value) = std::env::var(variable) {
+                    return Ok(Some(value));
+                }
+            }
+            Some(CredentialSource::Dotenv | CredentialSource::ManualKeyEntry) => {}
+        }
+        let Some(path) = self.credential_file.as_deref() else {
+            return Err(ProviderError::Configuration(format!(
+                "environment variable {variable} is not set"
+            )));
+        };
+        let content = fs::read_to_string(path).map_err(|error| {
+            ProviderError::Configuration(format!("{}: {error}", path.display()))
+        })?;
+        parse_environment_value(&content, variable)
+            .map(Some)
+            .ok_or_else(|| {
+                ProviderError::Configuration(format!(
+                    "{variable} was not found in {}",
+                    path.display()
+                ))
+            })
+    }
+}
+
+fn parse_environment_value(content: &str, variable: &str) -> Option<String> {
+    content.lines().find_map(|line| {
+        let line = line.trim().strip_prefix("export ").unwrap_or(line.trim());
+        let (name, value) = line.split_once('=')?;
+        if name.trim() != variable {
+            return None;
+        }
+        let value = value.trim();
+        let value = value
+            .strip_prefix('"')
+            .and_then(|value| value.strip_suffix('"'))
+            .or_else(|| {
+                value
+                    .strip_prefix('\'')
+                    .and_then(|value| value.strip_suffix('\''))
+            })
+            .unwrap_or(value);
+        (!value.is_empty()).then(|| value.to_owned())
+    })
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CredentialSource {
+    Bashrc,
+    Dotenv,
+    ManualKeyEntry,
 }
 
 fn default_usage_path() -> String {
     "/usage".into()
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ForecastConfig {
     #[serde(default = "default_samples")]
@@ -103,7 +277,7 @@ pub struct ForecastConfig {
     pub critical_threshold: f64,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AdmissionConfig {
     #[serde(default = "default_admission_enabled")]
@@ -150,6 +324,7 @@ impl Default for Config {
             providers: BTreeMap::new(),
             forecast: ForecastConfig::default(),
             admission: AdmissionConfig::default(),
+            instruments: InstrumentConfig::default(),
         }
     }
 }
@@ -208,6 +383,39 @@ fn default_default_delay_ms() -> u64 {
 fn default_admit_when_unknown() -> bool {
     true
 }
+fn default_rpm_max() -> f64 {
+    10_000.0
+}
+fn default_rpm_redline() -> f64 {
+    8_500.0
+}
+fn default_scale_mode() -> String {
+    "fixed".into()
+}
+fn default_rpd_limit() -> f64 {
+    100_000.0
+}
+fn default_rpd_warning() -> f64 {
+    0.75
+}
+fn default_rpd_critical() -> f64 {
+    0.90
+}
+fn default_provider_cycle_seconds() -> u64 {
+    4
+}
+fn default_dashboard_sample_seconds() -> u64 {
+    15
+}
+fn default_network_sample_millis() -> u64 {
+    250
+}
+fn default_network_enabled() -> bool {
+    true
+}
+fn default_network_bytes_per_token() -> f64 {
+    4.0
+}
 
 pub fn parse_duration(value: &str) -> Result<Duration, ProviderError> {
     let split = value.find(|c: char| !c.is_ascii_digit()).ok_or_else(|| {
@@ -242,6 +450,10 @@ impl Config {
         if let Some(path) = std::env::var_os("INGAUGE_CONFIG") {
             return Some(PathBuf::from(path));
         }
+        let local = PathBuf::from("ingauge.toml");
+        if local.exists() {
+            return Some(local);
+        }
         std::env::var_os("XDG_CONFIG_HOME")
             .map(|p| PathBuf::from(p).join("ingauge/ingauge.toml"))
             .or_else(|| {
@@ -259,6 +471,39 @@ impl Config {
             .map_err(|e| ProviderError::Configuration(format!("{}: {e}", path.display())))?;
         toml::from_str(&text).map_err(|e| ProviderError::Configuration(e.to_string()))
     }
+
+    pub fn save(&self, path: &Path) -> Result<(), ProviderError> {
+        if let Some(parent) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            fs::create_dir_all(parent).map_err(|error| {
+                ProviderError::Configuration(format!("{}: {error}", parent.display()))
+            })?;
+        }
+        let rendered = toml::to_string_pretty(self)
+            .map_err(|error| ProviderError::Configuration(error.to_string()))?;
+        let temporary = path.with_extension("toml.tmp");
+        write_private(&temporary, rendered.as_bytes())?;
+        fs::rename(&temporary, path)
+            .map_err(|error| ProviderError::Configuration(format!("{}: {error}", path.display())))
+    }
+}
+
+pub fn write_private(path: &Path, content: &[u8]) -> Result<(), ProviderError> {
+    use std::io::Write as _;
+    let mut options = fs::OpenOptions::new();
+    options.create(true).truncate(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(path)
+        .map_err(|error| ProviderError::Configuration(format!("{}: {error}", path.display())))?;
+    file.write_all(content)
+        .map_err(|error| ProviderError::Configuration(format!("{}: {error}", path.display())))
 }
 
 #[cfg(test)]
@@ -352,5 +597,31 @@ mod tests {
             },
         );
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn credential_sources_resolve_without_exposing_values_in_config() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let dotenv = directory.path().join("provider.env");
+        write_private(&dotenv, b"IGNORED=x\nTEST_PROVIDER_KEY='secret-value'\n")
+            .expect("write private dotenv");
+        let provider = ProviderConfig {
+            api_key_env: Some("TEST_PROVIDER_KEY".into()),
+            credential_source: Some(CredentialSource::Dotenv),
+            credential_file: Some(dotenv),
+            ..ProviderConfig::default()
+        };
+        assert!(matches!(
+            provider.resolve_api_key(),
+            Ok(Some(value)) if value == "secret-value"
+        ));
+
+        let mut config = Config::default();
+        config.providers.insert("fixture".into(), provider);
+        let path = directory.path().join("ingauge.toml");
+        config.save(&path).expect("save config");
+        let saved = fs::read_to_string(path).expect("read config");
+        assert!(saved.contains("credential_source = \"dotenv\""));
+        assert!(!saved.contains("secret-value"));
     }
 }

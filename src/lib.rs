@@ -8,9 +8,13 @@ pub mod daemon;
 pub mod discovery;
 pub mod error;
 pub mod forecast;
+pub mod instrument;
 pub mod model;
+pub mod network;
 pub mod presentation;
 pub mod providers;
+pub mod setup;
 pub mod store;
+pub mod telemetry;
 
 pub use model::*;

@@ -95,6 +95,12 @@ fn derive_snapshot(
             .zip(request_used)
             .map(|(limit, used)| limit.saturating_sub(used))
     });
+    let monthly_used = integer(Metric::MonthlyUsage);
+    let monthly_limit = integer(Metric::MonthlyLimit);
+    let budget_used = integer(Metric::BudgetUsage);
+    let budget_limit = integer(Metric::BudgetLimit);
+    let fuel_used = monthly_used.or(budget_used).or(token_used);
+    let fuel_limit = monthly_limit.or(budget_limit).or(token_limit);
     if request_used.is_some() || request_limit.is_some() || request_remaining.is_some() {
         quotas.push(Quota {
             metric: Metric::Requests,
@@ -154,6 +160,21 @@ fn derive_snapshot(
                 requests_per_minute,
             },
         ),
+        telemetry: ModelTelemetry {
+            fuel_used,
+            fuel_limit,
+            tokens_used: token_used,
+            output_tokens: integer(Metric::OutputTokens),
+            tpm_limit: tokens_per_minute,
+            responses: request_used,
+            rpm_limit: requests_per_minute,
+            rpd: integer(Metric::DailyUsage),
+            rpd_limit: integer(Metric::DailyLimit),
+            rpm: requests_per_minute,
+            tpm: tokens_per_minute,
+            lifetime_input_tokens: integer(Metric::InputTokens),
+            lifetime_output_tokens: integer(Metric::OutputTokens),
+        },
         next_reset: reset,
         exhaustion,
         headroom,

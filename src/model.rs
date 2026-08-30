@@ -6,7 +6,8 @@ mod identifier;
 mod metric;
 
 pub use capacity::{
-    CapacityEvent, CapacityEventKind, CapacitySnapshot, CapacityState, ConsumptionRate, Quota,
+    CapacityEvent, CapacityEventKind, CapacitySnapshot, CapacityState, ConsumptionRate,
+    ModelTelemetry, Quota,
 };
 pub use forecast::ForecastResult;
 pub use identifier::{ModelId, ProviderId};
