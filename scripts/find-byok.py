@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import copy
+from curly_expand import expand_or_literal, cartesian
 # Copyright (c) 2026 sal
 # SPDX-License-Identifier: MIT
 """Discover BYOK LLM usage in local projects using chakra + heuristics.
@@ -103,28 +105,32 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=Path("byok-report.json"), help="Output JSON file")
     args = parser.parse_args()
 
-    if args.home:
-        projects = discover_projects(args.home)
-    elif args.projects:
-        projects = [Path(p) for p in args.projects]
-    else:
-        parser.print_help()
-        return 1
+    __curly_projects = cartesian([expand_or_literal(str(t)) for t in (args.projects or [''])])
+    for __curly_v_projects in __curly_projects:
+        args = copy.copy(args)
+        args.projects = __curly_v_projects
+        if args.home:
+            projects = discover_projects(args.home)
+        elif args.projects:
+            projects = [Path(p) for p in args.projects]
+        else:
+            parser.print_help()
+            return 1
 
-    reports = {}
-    for project in projects:
-        print(f"Scanning {project} ...", file=sys.stderr)
-        report = scan_project(project)
-        reports[report.path] = asdict(report)
+        reports = {}
+        for project in projects:
+            print(f"Scanning {project} ...", file=sys.stderr)
+            report = scan_project(project)
+            reports[report.path] = asdict(report)
 
-    output = {
-        "generated_at": subprocess.check_output(["date", "-u", "+%Y-%m-%dT%H:%M:%SZ"]).decode().strip(),
-        "projects": reports,
-    }
+        output = {
+            "generated_at": subprocess.check_output(["date", "-u", "+%Y-%m-%dT%H:%M:%SZ"]).decode().strip(),
+            "projects": reports,
+        }
 
-    args.output.write_text(json.dumps(output, indent=2))
-    print(f"Report written to {args.output}", file=sys.stderr)
-    return 0
+        args.output.write_text(json.dumps(output, indent=2))
+        print(f"Report written to {args.output}", file=sys.stderr)
+        return 0
 
 
 if __name__ == "__main__":
