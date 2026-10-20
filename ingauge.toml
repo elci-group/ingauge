@@ -1,6 +1,7 @@
 schema_version = 1
 
 [general]
+database = "/home/sal/ingauge/ingauge.db"
 poll_interval = "60s"
 history_retention = "30d"
 connect_timeout = "3s"

@@ -1,6 +1,10 @@
 [operation]
 mode = "actuate"
 
+[version_thresholds]
+minor = 0.6
+patch = 0.0
+
 [watch]
 path = "."
 recursive = true

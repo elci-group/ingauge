@@ -30,3 +30,6 @@ __pycache__/
 *.swo
 .DS_Store
 *.log
+.azusa/
+.uni/
+.orb
